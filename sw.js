@@ -1,4 +1,4 @@
-const CACHE = "budget-lens-v3";
+const CACHE = "budget-lens-v4";
 const ASSETS = ["./", "./index.html", "./css/tokens.css", "./css/app.css", "./js/db.js", "./js/model.js", "./js/app.js", "./manifest.webmanifest", "./icon.svg"];
 self.addEventListener("install", event => event.waitUntil(caches.open(CACHE).then(cache => cache.addAll(ASSETS)).then(() => self.skipWaiting())));
 self.addEventListener("activate", event => event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key)))).then(() => self.clients.claim())));

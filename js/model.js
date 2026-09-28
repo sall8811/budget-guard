@@ -24,43 +24,60 @@ export const cycleStatus = (cycle, today = isoToday()) => {
   return "active";
 };
 
-export function seedState() {
-  const now = new Date().toISOString();
-  const accountId = "acc_citic";
-  const cycleId = "cy_daily";
-  const seg1 = "seg_1";
-  const seg2 = "seg_2";
+export function createInitialState() {
   return {
-    version: 1,
-    accounts: [{ id: accountId, name: "中信信用卡", order: 0, archived: false, createdAt: now }],
-    channels: [
-      { id: "ch_food", accountId, name: "吃喝用", order: 0, archived: false, createdAt: now },
-      { id: "ch_cat", accountId, name: "猫", order: 1, archived: false, createdAt: now },
-      { id: "ch_sub", accountId, name: "月度订阅", order: 2, archived: false, createdAt: now },
-      { id: "ch_fun", accountId, name: "玩乐", order: 3, archived: false, createdAt: now }
-    ],
-    cycles: [{
-      id: cycleId, accountId, name: "日常开销", start: "2026-09-15", end: "2026-10-15", order: 0, archived: false, createdAt: now,
-      segments: [
-        { id: seg1, name: "第一分段", start: "2026-09-15", end: "2026-10-01", order: 0 },
-        { id: seg2, name: "第二分段", start: "2026-10-02", end: "2026-10-15", order: 1 }
-      ],
-      allocations: [
-        { channelId: "ch_food", totalBudget: 130000, segmented: true, segmentBudgets: { [seg1]: 65000, [seg2]: 65000 } },
-        { channelId: "ch_cat", totalBudget: 80000, segmented: false, segmentBudgets: {} },
-        { channelId: "ch_sub", totalBudget: 20000, segmented: false, segmentBudgets: {} },
-        { channelId: "ch_fun", totalBudget: 30000, segmented: true, segmentBudgets: { [seg1]: 10000, [seg2]: 20000 } }
-      ]
-    }],
-    transactions: [
-      { id: "tx_1", cycleId, channelId: "ch_food", type: "expense", amount: 35000, date: "2026-09-20", createdAt: now },
-      { id: "tx_2", cycleId, channelId: "ch_cat", type: "expense", amount: 28000, date: "2026-09-21", createdAt: now },
-      { id: "tx_3", cycleId, channelId: "ch_sub", type: "expense", amount: 13000, date: "2026-09-16", createdAt: now },
-      { id: "tx_4", cycleId, channelId: "ch_fun", type: "expense", amount: 4000, date: "2026-09-24", createdAt: now }
-    ],
+    version: 2,
+    accounts: [],
+    channels: [],
+    cycles: [],
+    transactions: [],
     settlements: [],
     budgetChanges: []
   };
+}
+
+export function isUntouchedLegacySample(state) {
+  if (!state || state.version !== 1) return false;
+  const exactIds = (items, ids) => items?.length === ids.length && ids.every(id => items.some(item => item.id === id));
+  const account = state.accounts?.find(item => item.id === "acc_citic");
+  const cycle = state.cycles?.find(item => item.id === "cy_daily");
+  const expectedChannels = { ch_food: "吃喝用", ch_cat: "猫", ch_sub: "月度订阅", ch_fun: "玩乐" };
+  const expectedTransactions = {
+    tx_1: ["ch_food", 35000, "2026-09-20"],
+    tx_2: ["ch_cat", 28000, "2026-09-21"],
+    tx_3: ["ch_sub", 13000, "2026-09-16"],
+    tx_4: ["ch_fun", 4000, "2026-09-24"]
+  };
+  const expectedBudgets = { ch_food: 130000, ch_cat: 80000, ch_sub: 20000, ch_fun: 30000 };
+  return exactIds(state.accounts, ["acc_citic"])
+    && exactIds(state.channels, ["ch_food", "ch_cat", "ch_sub", "ch_fun"])
+    && exactIds(state.cycles, ["cy_daily"])
+    && exactIds(state.transactions, ["tx_1", "tx_2", "tx_3", "tx_4"])
+    && account?.name === "中信信用卡" && account.archived === false
+    && cycle?.name === "日常开销" && cycle.start === "2026-09-15" && cycle.end === "2026-10-15" && cycle.archived === false
+    && exactIds(cycle?.segments, ["seg_1", "seg_2"])
+    && cycle.segments.find(item => item.id === "seg_1")?.start === "2026-09-15"
+    && cycle.segments.find(item => item.id === "seg_1")?.end === "2026-10-01"
+    && cycle.segments.find(item => item.id === "seg_2")?.start === "2026-10-02"
+    && cycle.segments.find(item => item.id === "seg_2")?.end === "2026-10-15"
+    && cycle.allocations?.length === 4
+    && Object.entries(expectedBudgets).every(([channelId, budget]) => cycle.allocations.find(item => item.channelId === channelId)?.totalBudget === budget)
+    && cycle.allocations.find(item => item.channelId === "ch_food")?.segmented === true
+    && cycle.allocations.find(item => item.channelId === "ch_food")?.segmentBudgets?.seg_1 === 65000
+    && cycle.allocations.find(item => item.channelId === "ch_food")?.segmentBudgets?.seg_2 === 65000
+    && cycle.allocations.find(item => item.channelId === "ch_fun")?.segmented === true
+    && cycle.allocations.find(item => item.channelId === "ch_fun")?.segmentBudgets?.seg_1 === 10000
+    && cycle.allocations.find(item => item.channelId === "ch_fun")?.segmentBudgets?.seg_2 === 20000
+    && Object.entries(expectedChannels).every(([id, name]) => {
+      const channel = state.channels.find(item => item.id === id);
+      return channel?.name === name && channel.accountId === "acc_citic" && channel.archived === false;
+    })
+    && Object.entries(expectedTransactions).every(([id, [channelId, amount, date]]) => {
+      const transaction = state.transactions.find(item => item.id === id);
+      return transaction?.channelId === channelId && transaction.amount === amount && transaction.date === date && transaction.type === "expense";
+    })
+    && !(state.settlements?.length)
+    && !(state.budgetChanges?.length);
 }
 
 export const accountById = (state, id) => state.accounts.find(item => item.id === id);

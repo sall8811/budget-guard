@@ -1,0 +1,13 @@
+{
+  "name": "额度看板",
+  "short_name": "额度看板",
+  "description": "按账户与开销渠道监督预算。",
+  "lang": "zh-CN",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f3f6fb",
+  "theme_color": "#10192d",
+  "icons": [
+    { "src": "./icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

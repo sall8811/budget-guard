@@ -366,7 +366,8 @@ function renderSettlement(item, index) {
 
 async function handleSubmit(event) {
   const form = event.target;
-  if (form.id === "record-form") {
+  const formId = form.getAttribute("id");
+  if (formId === "record-form") {
     event.preventDefault();
     const data = new FormData(form);
     const [cycleId, channelId] = String(data.get("context")).split("|");
@@ -377,7 +378,7 @@ async function handleSubmit(event) {
     closeDialog();
     await persist(existing ? "记录已更新" : record.type === "refund" ? "退款已记录" : "支出已记录");
   }
-  if (form.id === "entity-form") {
+  if (formId === "entity-form") {
     event.preventDefault();
     const data = new FormData(form);
     const kind = form.dataset.kind;
@@ -392,7 +393,7 @@ async function handleSubmit(event) {
     closeDialog();
     await persist(existing ? "名称已更新" : "已创建");
   }
-  if (form.id === "cycle-form") {
+  if (formId === "cycle-form") {
     event.preventDefault();
     syncCycleDraftFromForm();
     const error = validateCycleDraft();
@@ -406,7 +407,7 @@ async function handleSubmit(event) {
     closeDialog();
     await persist("预算周期已创建");
   }
-  if (form.id === "budget-form") {
+  if (formId === "budget-form") {
     event.preventDefault();
     const cycle = cycleById(state, form.dataset.cycleId);
     const allocation = cycle.allocations.find(item => item.channelId === form.dataset.channelId);

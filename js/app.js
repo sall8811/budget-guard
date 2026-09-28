@@ -15,6 +15,7 @@ let recoveryBackups = [];
 let pendingImport = null;
 let currentView = "home";
 let toastTimer;
+let dragSort = null;
 
 const h = value => String(value ?? "").replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
 const money = value => `${value < 0 ? "-" : ""}¥${yuan(Math.abs(value))}`;
@@ -93,8 +94,7 @@ function renderAccount(account) {
   return `<section class="account-card" aria-labelledby="account-${account.id}">
     <div class="account-summary">
       <div class="account-heading"><h2 id="account-${account.id}">${h(account.name)}</h2><span>${activeCycles.length}个进行中周期</span></div>
-      <p class="eyebrow">剩余总额度</p><p class="balance ${remaining < 0 ? "negative" : ""}">${money(remaining)}</p>
-      <div class="summary-grid"><div><small>总预算</small><strong>${money(totalBudget)}</strong></div><div><small>实际支出</small><strong>${money(spent)}</strong></div></div>
+      <div class="account-metrics"><div class="account-main-metric"><small>剩余总额度</small><strong class="balance ${remaining < 0 ? "negative" : ""}">${money(remaining)}</strong></div><div><small>总预算</small><strong>${money(totalBudget)}</strong></div><div><small>实际支出</small><strong>${money(spent)}</strong></div></div>
     </div>
     ${cycles.length ? cycles.map(renderCycle).join("") : `<div class="inline-empty">暂无进行中或待归档周期</div>`}
   </section>`;
@@ -152,40 +152,57 @@ function renderTransaction(tx) {
 }
 
 function renderManage() {
-  const accounts = sortedAccounts(state);
+  const accounts = sortedAccounts(state).sort((a, b) => Number(a.archived) - Number(b.archived) || a.order - b.order);
   const latestBackup = recoveryBackups[0];
+  const cycleGroups = accounts.map(renderManageCycles).filter(Boolean).join("");
   return `${header("统一管理", "账户、渠道和预算周期")}
-    <section class="manage-section"><div class="section-heading"><div><h2>账户</h2><p>排序决定首页分组顺序</p></div><button class="small-add" data-action="add-account" type="button">＋ 新建</button></div>
-      <div class="manage-list">${accounts.map((account, index) => renderManageAccount(account, index, accounts.length)).join("") || emptyState("暂无账户", "新建一个账户开始。")}</div></section>
-    <section class="manage-section"><div class="section-heading"><div><h2>开销渠道</h2><p>渠道固定归属一个账户</p></div><button class="small-add" data-action="add-channel" type="button">＋ 新建</button></div>
+    <section class="manage-section"><div class="section-heading"><div><h2>账户</h2><p>按住左侧手柄拖动排序</p></div><button class="small-add" data-action="add-account" type="button">＋ 新建</button></div>
+      <div class="manage-list" data-sort-list>${accounts.map(renderManageAccount).join("") || emptyState("暂无账户", "新建一个账户开始。")}</div></section>
+    <section class="manage-section"><div class="section-heading"><div><h2>开销渠道</h2><p>渠道固定归属账户，可拖动排序</p></div><button class="small-add" data-action="add-channel" type="button">＋ 新建</button></div>
       ${accounts.map(account => renderManageChannels(account)).join("")}</section>
-    <section class="manage-section"><div class="section-heading"><div><h2>预算周期</h2><p>同一渠道不能进入重叠周期</p></div><button class="small-add" data-action="add-cycle" type="button">＋ 新建</button></div>
-      <div class="manage-list">${state.cycles.slice().sort((a,b) => compareDate(b.start,a.start)).map(renderManageCycle).join("") || emptyState("暂无周期", "创建周期并为渠道分配预算。")}</div></section>
+    <section class="manage-section"><div class="section-heading"><div><h2>预算周期</h2><p>可编辑、删除，并拖动同状态周期排序</p></div><button class="small-add" data-action="add-cycle" type="button">＋ 新建</button></div>
+      ${cycleGroups || emptyState("暂无周期", "创建周期并为渠道分配预算。")}</section>
     <section class="manage-section"><div class="section-heading"><div><h2>手动同步</h2><p>通过数据文件在手机和电脑之间转移</p></div></div>
       <div class="data-actions"><button class="secondary-button" data-action="export" type="button">保存数据文件</button><label class="secondary-button file-button">导入并覆盖<input id="import-file" type="file" accept="application/json,.json"></label><button class="secondary-button" data-action="show-backups" type="button">恢复旧版本${recoveryBackups.length ? `（${recoveryBackups.length}）` : ""}</button></div>
       <div class="sync-status"><strong>${latestBackup ? "最近自动备份" : "还没有自动备份"}</strong><span>${latestBackup ? `${dateTimeLabel(latestBackup.createdAt)} · ${h(latestBackup.reason)}` : "每次导入或重置前，当前数据都会先保存在这里。"}</span></div>
       <button class="text-danger" data-action="reset" type="button">清空全部数据</button></section>`;
 }
 
-function renderManageAccount(account, index, total) {
+function dragHandle(label) {
+  return `<button class="drag-handle" data-drag-handle type="button" aria-label="拖动调整${h(label)}的顺序"><span aria-hidden="true">⠿</span></button>`;
+}
+
+function renderManageAccount(account) {
   const linked = state.cycles.some(cycle => cycle.accountId === account.id && !cycle.archived);
-  return `<article class="manage-row ${account.archived ? "archived" : ""}"><div><strong>${h(account.name)}</strong><span>${account.archived ? "已归档 · 只读" : "可用"}</span></div>
-    <div class="row-actions">${!account.archived ? `<button data-action="move-account" data-id="${account.id}" data-direction="-1" ${index === 0 ? "disabled" : ""} type="button">↑</button><button data-action="move-account" data-id="${account.id}" data-direction="1" ${index === total - 1 ? "disabled" : ""} type="button">↓</button><button data-action="edit-account" data-id="${account.id}" type="button">编辑</button>` : ""}<button data-action="toggle-account" data-id="${account.id}" data-linked="${linked}" type="button">${account.archived ? "恢复" : "归档"}</button></div></article>`;
+  const sortable = !account.archived;
+  return `<article class="manage-row ${account.archived ? "archived" : ""}" ${sortable ? `data-sort-kind="account" data-sort-group="accounts" data-sort-id="${account.id}"` : ""}>${sortable ? dragHandle(account.name) : ""}<div class="manage-row-info"><strong>${h(account.name)}</strong><span>${account.archived ? "已归档 · 只读" : "可用"}</span></div>
+    <div class="row-actions">${sortable ? `<button data-action="edit-account" data-id="${account.id}" type="button">编辑</button>` : ""}<button data-action="toggle-account" data-id="${account.id}" data-linked="${linked}" type="button">${account.archived ? "恢复" : "归档"}</button></div></article>`;
 }
 
 function renderManageChannels(account) {
-  const channels = sortedChannels(state, account.id);
+  const channels = sortedChannels(state, account.id).sort((a, b) => Number(a.archived) - Number(b.archived) || a.order - b.order);
   if (!channels.length) return "";
-  return `<div class="manage-group"><h3>${h(account.name)}${account.archived ? " · 已归档" : ""}</h3><div class="manage-list">${channels.map((channel, index) => {
+  return `<div class="manage-group"><h3>${h(account.name)}${account.archived ? " · 已归档" : ""}</h3><div class="manage-list" data-sort-list>${channels.map(channel => {
     const used = state.cycles.some(cycle => !cycle.archived && cycle.allocations.some(a => a.channelId === channel.id));
-    return `<article class="manage-row ${channel.archived ? "archived" : ""}"><div><strong>${h(channel.name)}</strong><span>${channel.archived ? "已归档 · 只读" : "可用"}</span></div><div class="row-actions">${!channel.archived ? `<button data-action="move-channel" data-id="${channel.id}" data-direction="-1" ${index === 0 ? "disabled" : ""} type="button">↑</button><button data-action="move-channel" data-id="${channel.id}" data-direction="1" ${index === channels.length - 1 ? "disabled" : ""} type="button">↓</button><button data-action="edit-channel" data-id="${channel.id}" type="button">编辑</button>` : ""}<button data-action="toggle-channel" data-id="${channel.id}" data-used="${used}" type="button">${channel.archived ? "恢复" : "归档"}</button></div></article>`;
+    const sortable = !channel.archived && !account.archived;
+    return `<article class="manage-row ${channel.archived ? "archived" : ""}" ${sortable ? `data-sort-kind="channel" data-sort-group="channels-${account.id}" data-sort-id="${channel.id}"` : ""}>${sortable ? dragHandle(channel.name) : ""}<div class="manage-row-info"><strong>${h(channel.name)}</strong><span>${channel.archived ? "已归档 · 只读" : "可用"}</span></div><div class="row-actions">${sortable ? `<button data-action="edit-channel" data-id="${channel.id}" type="button">编辑</button>` : ""}<button data-action="toggle-channel" data-id="${channel.id}" data-used="${used}" type="button">${channel.archived ? "恢复" : "归档"}</button></div></article>`;
   }).join("")}</div></div>`;
 }
 
+function renderManageCycles(account) {
+  const cycles = state.cycles.filter(cycle => cycle.accountId === account.id).sort((a, b) => {
+    const statusDelta = cycleOrderValue(a) - cycleOrderValue(b);
+    if (statusDelta) return statusDelta;
+    return cycleOrderValue(a) < 2 ? a.order - b.order : compareDate(b.end, a.end);
+  });
+  if (!cycles.length) return "";
+  return `<div class="manage-group"><h3>${h(account.name)}${account.archived ? " · 已归档" : ""}</h3><div class="manage-list" data-sort-list>${cycles.map(renderManageCycle).join("")}</div></div>`;
+}
+
 function renderManageCycle(cycle) {
-  const account = accountById(state, cycle.accountId);
   const status = cycleStatus(cycle);
-  return `<article class="manage-row ${cycle.archived ? "archived" : ""}"><div><strong>${h(cycle.name)}</strong><span>${h(account?.name)} · ${formatDate(cycle.start)}—${formatDate(cycle.end)} · ${statusLabel(status)}</span></div><div class="row-actions">${status === "active" ? `<button data-action="move-cycle" data-id="${cycle.id}" data-direction="-1" type="button">↑</button><button data-action="move-cycle" data-id="${cycle.id}" data-direction="1" type="button">↓</button>` : ""}${cycle.archived ? `<button data-action="restore-cycle" data-id="${cycle.id}" type="button">恢复</button>` : status === "ended" ? `<button data-action="archive-cycle" data-cycle-id="${cycle.id}" type="button">归档</button>` : ""}</div></article>`;
+  const sortable = !cycle.archived && ["active", "upcoming"].includes(status);
+  return `<article class="manage-row ${cycle.archived ? "archived" : ""}" ${sortable ? `data-sort-kind="cycle" data-sort-group="cycles-${cycle.accountId}-${status}" data-sort-id="${cycle.id}"` : ""}>${sortable ? dragHandle(cycle.name) : ""}<div class="manage-row-info"><strong>${h(cycle.name)}</strong><span>${formatDate(cycle.start)}—${formatDate(cycle.end)} · ${statusLabel(status)}</span></div><div class="row-actions">${cycle.archived ? `<button data-action="restore-cycle" data-id="${cycle.id}" type="button">恢复</button>` : `<button data-action="edit-cycle" data-id="${cycle.id}" type="button">编辑</button><button class="danger-action" data-action="delete-cycle" data-id="${cycle.id}" type="button">删除</button>${status === "ended" ? `<button data-action="archive-cycle" data-cycle-id="${cycle.id}" type="button">归档</button>` : ""}`}</div></article>`;
 }
 
 function emptyState(title, text) {
@@ -243,10 +260,30 @@ function openEntityDialog(kind, existing = null) {
 }
 
 let cycleDraft = null;
-function openCycleDialog() {
+function openCycleDialog(existing = null) {
   const accounts = sortedAccounts(state).filter(item => !item.archived);
   if (!accounts.length) return showToast("请先创建可用账户");
-  cycleDraft = { accountId: accounts[0].id, name: "", start: today(), end: today(), segments: [], selected: {} };
+  const segments = existing ? existing.segments.map(segment => ({ ...segment })) : [];
+  const selected = {};
+  if (existing) {
+    existing.allocations.forEach(allocation => {
+      selected[allocation.channelId] = {
+        enabled: true,
+        total: String(allocation.totalBudget / 100),
+        segmented: allocation.segmented,
+        segmentValues: segments.map(segment => String((allocation.segmentBudgets[segment.id] || 0) / 100))
+      };
+    });
+  }
+  cycleDraft = {
+    id: existing?.id || null,
+    accountId: existing?.accountId || accounts[0].id,
+    name: existing?.name || "",
+    start: existing?.start || today(),
+    end: existing?.end || today(),
+    segments,
+    selected
+  };
   renderCycleDialog();
 }
 
@@ -254,8 +291,8 @@ function renderCycleDialog() {
   const accounts = sortedAccounts(state).filter(item => !item.archived);
   const channels = sortedChannels(state, cycleDraft.accountId).filter(item => !item.archived);
   openDialog(`<form id="cycle-form" class="dialog-card wide-dialog">
-    <div class="dialog-head"><div><p class="dialog-kicker">预算设置</p><h2 id="dialog-title">新建预算周期</h2></div><button class="dialog-close" data-action="close-dialog" type="button">×</button></div>
-    <div class="form-grid"><label class="field"><span>所属账户</span><select name="accountId">${accounts.map(account => `<option value="${account.id}" ${cycleDraft.accountId === account.id ? "selected" : ""}>${h(account.name)}</option>`).join("")}</select></label>
+    <div class="dialog-head"><div><p class="dialog-kicker">预算设置</p><h2 id="dialog-title">${cycleDraft.id ? "编辑" : "新建"}预算周期</h2></div><button class="dialog-close" data-action="close-dialog" type="button">×</button></div>
+    <div class="form-grid"><label class="field"><span>所属账户</span><select name="accountId" ${cycleDraft.id ? "disabled" : ""}>${accounts.map(account => `<option value="${account.id}" ${cycleDraft.accountId === account.id ? "selected" : ""}>${h(account.name)}</option>`).join("")}</select></label>
     <label class="field"><span>周期名称</span><input name="name" value="${h(cycleDraft.name)}" maxlength="30" placeholder="例如：日常开销" required></label>
     <label class="field"><span>开始日期</span><input name="start" type="date" value="${cycleDraft.start}" required></label>
     <label class="field"><span>结束日期</span><input name="end" type="date" value="${cycleDraft.end}" required></label></div>
@@ -266,15 +303,16 @@ function renderCycleDialog() {
       <div class="allocation-list">${channels.length ? channels.map(channel => renderAllocationDraft(channel)).join("") : `<p class="form-note">该账户还没有可用渠道。</p>`}</div>
     </div>
     <p id="cycle-error" class="form-error hidden"></p>
-    <div class="dialog-actions"><span></span><button class="primary-button" type="submit">创建周期</button></div>
+    <div class="dialog-actions"><span></span><button class="primary-button" type="submit">${cycleDraft.id ? "保存修改" : "创建周期"}</button></div>
   </form>`);
 }
 
 function renderAllocationDraft(channel) {
   const draft = cycleDraft.selected[channel.id] || { enabled: false, total: "", segmented: false, segmentValues: [] };
-  const overlap = state.cycles.some(cycle => cycle.allocations.some(a => a.channelId === channel.id) && !(compareDate(cycle.end, cycleDraft.start) < 0 || compareDate(cycle.start, cycleDraft.end) > 0));
+  const overlap = state.cycles.some(cycle => cycle.id !== cycleDraft.id && cycle.allocations.some(a => a.channelId === channel.id) && !(compareDate(cycle.end, cycleDraft.start) < 0 || compareDate(cycle.start, cycleDraft.end) > 0));
+  const locked = Boolean(cycleDraft.id && state.transactions.some(transaction => transaction.cycleId === cycleDraft.id && transaction.channelId === channel.id));
   return `<div class="allocation-edit ${draft.enabled ? "selected" : ""} ${overlap ? "disabled" : ""}">
-    <label class="allocation-toggle"><input type="checkbox" data-channel-id="${channel.id}" data-key="enabled" ${draft.enabled ? "checked" : ""} ${overlap ? "disabled" : ""}><span><strong>${h(channel.name)}</strong>${overlap ? `<small>与已有周期重叠</small>` : ""}</span></label>
+    <label class="allocation-toggle"><input type="checkbox" data-channel-id="${channel.id}" data-key="enabled" ${draft.enabled ? "checked" : ""} ${overlap || locked ? "disabled" : ""}><span><strong>${h(channel.name)}</strong>${overlap ? `<small>与已有周期重叠</small>` : locked ? `<small>已有支出记录，不能移除</small>` : ""}</span></label>
     ${draft.enabled ? `<label class="mini-field"><span>总预算</span><input inputmode="decimal" data-channel-id="${channel.id}" data-key="total" value="${h(draft.total)}" placeholder="0" required></label>
       ${cycleDraft.segments.length > 1 ? `<label class="inline-check"><input type="checkbox" data-channel-id="${channel.id}" data-key="segmented" ${draft.segmented ? "checked" : ""}>按分段分配</label>` : ""}
       ${draft.segmented ? `<div class="segment-budget-list">${cycleDraft.segments.map((segment, index) => `<label><span>${h(segment.name)}</span><input inputmode="decimal" data-channel-id="${channel.id}" data-segment-budget="${index}" value="${h(draft.segmentValues[index] || "")}" placeholder="0"></label>`).join("")}</div>` : ""}` : ""}
@@ -304,6 +342,7 @@ function syncCycleDraftFromForm() {
 function validateCycleDraft() {
   if (!cycleDraft.name.trim()) return "请填写周期名称";
   if (compareDate(cycleDraft.start, cycleDraft.end) > 0) return "结束日期不能早于开始日期";
+  if (cycleDraft.id && state.transactions.some(transaction => transaction.cycleId === cycleDraft.id && !within(transaction.date, cycleDraft.start, cycleDraft.end))) return "新日期范围不能排除已有支出记录";
   const selected = Object.entries(cycleDraft.selected).filter(([, value]) => value.enabled);
   if (!selected.length) return "至少选择一个开销渠道";
   if (cycleDraft.segments.length) {
@@ -317,7 +356,7 @@ function validateCycleDraft() {
   for (const [, allocation] of selected) {
     if (cents(allocation.total) <= 0) return "渠道总预算必须大于0";
     const channelId = selected.find(([, value]) => value === allocation)?.[0];
-    if (state.cycles.some(cycle => cycle.allocations.some(item => item.channelId === channelId) && !(compareDate(cycle.end, cycleDraft.start) < 0 || compareDate(cycle.start, cycleDraft.end) > 0))) return "所选渠道与已有预算周期重叠";
+    if (state.cycles.some(cycle => cycle.id !== cycleDraft.id && cycle.allocations.some(item => item.channelId === channelId) && !(compareDate(cycle.end, cycleDraft.start) < 0 || compareDate(cycle.start, cycleDraft.end) > 0))) return "所选渠道与已有预算周期重叠";
     if (allocation.segmented) {
       const sum = allocation.segmentValues.reduce((total, value) => total + cents(value), 0);
       if (sum !== cents(allocation.total)) return "分段预算之和必须等于渠道总预算";
@@ -398,14 +437,22 @@ async function handleSubmit(event) {
     syncCycleDraftFromForm();
     const error = validateCycleDraft();
     if (error) { const box = dialogContent.querySelector("#cycle-error"); box.textContent = error; box.classList.remove("hidden"); return; }
-    const segments = cycleDraft.segments.map((segment, index) => ({ ...segment, id: uid("seg"), order: index }));
+    const existingCycle = cycleDraft.id ? cycleById(state, cycleDraft.id) : null;
+    const segments = cycleDraft.segments.map((segment, index) => ({ ...segment, id: segment.id || uid("seg"), order: index }));
     const allocations = Object.entries(cycleDraft.selected).filter(([, value]) => value.enabled).map(([channelId, value]) => ({
       channelId, totalBudget: cents(value.total), segmented: value.segmented,
       segmentBudgets: value.segmented ? Object.fromEntries(segments.map((segment, index) => [segment.id, cents(value.segmentValues[index])])) : {}
     }));
-    state.cycles.push({ id: uid("cy"), accountId: cycleDraft.accountId, name: cycleDraft.name.trim(), start: cycleDraft.start, end: cycleDraft.end, order: state.cycles.filter(item => item.accountId === cycleDraft.accountId && cycleStatus(item) === "active").length, archived: false, createdAt: new Date().toISOString(), segments, allocations });
+    if (existingCycle) {
+      Object.assign(existingCycle, { name: cycleDraft.name.trim(), start: cycleDraft.start, end: cycleDraft.end, segments, allocations, updatedAt: new Date().toISOString() });
+      const channelIds = new Set(allocations.map(allocation => allocation.channelId));
+      state.settlements = state.settlements.filter(settlement => settlement.cycleId !== existingCycle.id);
+      state.budgetChanges = state.budgetChanges.filter(change => change.cycleId !== existingCycle.id || channelIds.has(change.channelId));
+    } else {
+      state.cycles.push({ id: uid("cy"), accountId: cycleDraft.accountId, name: cycleDraft.name.trim(), start: cycleDraft.start, end: cycleDraft.end, order: state.cycles.filter(item => item.accountId === cycleDraft.accountId && ["active", "upcoming"].includes(cycleStatus(item))).length, archived: false, createdAt: new Date().toISOString(), segments, allocations });
+    }
     closeDialog();
-    await persist("预算周期已创建");
+    await persist(existingCycle ? "预算周期已更新" : "预算周期已创建");
   }
   if (formId === "budget-form") {
     event.preventDefault();
@@ -438,6 +485,8 @@ async function handleClick(event) {
   if (action === "edit-account") openEntityDialog("account", accountById(state, button.dataset.id));
   if (action === "edit-channel") openEntityDialog("channel", channelById(state, button.dataset.id));
   if (action === "add-cycle") openCycleDialog();
+  if (action === "edit-cycle") openCycleDialog(cycleById(state, button.dataset.id));
+  if (action === "delete-cycle") await deleteBudgetCycle(button.dataset.id);
   if (action === "channel-detail") openChannelDetail(button.dataset.cycleId, button.dataset.channelId);
   if (action === "cycle-details") { currentView = "records"; closeDialog(); render(); }
   if (action === "delete-record") {
@@ -446,15 +495,6 @@ async function handleClick(event) {
     state.transactions = state.transactions.filter(item => item.id !== tx.id);
     invalidateSettlements(tx.cycleId, tx.channelId);
     closeDialog(); await persist("记录已删除");
-  }
-  if (action === "move-account") await moveItem(state.accounts, button.dataset.id, Number(button.dataset.direction), item => !item.archived);
-  if (action === "move-channel") {
-    const channel = channelById(state, button.dataset.id);
-    await moveItem(state.channels, channel.id, Number(button.dataset.direction), item => item.accountId === channel.accountId && !item.archived);
-  }
-  if (action === "move-cycle") {
-    const cycle = cycleById(state, button.dataset.id);
-    await moveItem(state.cycles, cycle.id, Number(button.dataset.direction), item => item.accountId === cycle.accountId && cycleStatus(item) === "active");
   }
   if (action === "toggle-account") {
     const account = accountById(state, button.dataset.id);
@@ -474,7 +514,13 @@ async function handleClick(event) {
     cycleDraft.segments.push({ name: `第${index + 1}分段`, start: index ? addDays(cycleDraft.segments[index - 1].end, 1) : cycleDraft.start, end: cycleDraft.end });
     renderCycleDialog();
   }
-  if (action === "remove-segment") { syncCycleDraftFromForm(); cycleDraft.segments.splice(Number(button.dataset.index), 1); renderCycleDialog(); }
+  if (action === "remove-segment") {
+    syncCycleDraftFromForm();
+    const index = Number(button.dataset.index);
+    cycleDraft.segments.splice(index, 1);
+    Object.values(cycleDraft.selected).forEach(allocation => allocation.segmentValues.splice(index, 1));
+    renderCycleDialog();
+  }
   if (action === "settle") await settlePending(Number(button.dataset.index), button.dataset.decision);
   if (action === "export") exportBackup();
   if (action === "show-backups") await openRecoveryBackups();
@@ -493,22 +539,34 @@ async function handleClick(event) {
   }
 }
 
-async function moveItem(list, id, direction, predicate) {
-  const items = list.filter(predicate).sort((a,b) => a.order-b.order);
-  const index = items.findIndex(item => item.id === id);
-  const target = items[index + direction];
-  if (!target) return;
-  const current = items[index];
-  [current.order, target.order] = [target.order, current.order];
-  await persist("顺序已调整");
-}
-
 async function archiveCycle(cycleId) {
   const cycle = cycleById(state, cycleId);
   if (!cycle || cycleStatus(cycle) !== "ended") return showToast("进行中的周期不能归档");
   if (pendingSettlements(state).some(item => item.cycle.id === cycleId)) return showToast("请先处理本周期的结转待确认");
   cycle.archived = true;
   await persist("周期已归档");
+}
+
+async function deleteBudgetCycle(cycleId) {
+  const cycle = cycleById(state, cycleId);
+  if (!cycle || cycle.archived) return showToast("请先恢复已归档周期再删除");
+  const recordCount = state.transactions.filter(transaction => transaction.cycleId === cycleId).length;
+  const message = recordCount
+    ? `确定删除“${cycle.name}”吗？其中的${recordCount}条支出或退款记录也会删除。删除前会自动备份。`
+    : `确定删除“${cycle.name}”吗？删除前会自动备份。`;
+  if (!confirm(message)) return;
+  try {
+    const nextState = JSON.parse(JSON.stringify(state));
+    nextState.cycles = nextState.cycles.filter(item => item.id !== cycleId);
+    nextState.transactions = nextState.transactions.filter(transaction => transaction.cycleId !== cycleId);
+    nextState.settlements = nextState.settlements.filter(settlement => settlement.cycleId !== cycleId && settlement.targetCycleId !== cycleId);
+    nextState.budgetChanges = nextState.budgetChanges.filter(change => change.cycleId !== cycleId);
+    await replaceStateWithRecovery(nextState, state, "删除预算周期前自动备份");
+    state = nextState;
+    recoveryBackups = await loadRecoveryBackups();
+    render();
+    showToast("预算周期已删除，可从旧版本恢复");
+  } catch { showToast("删除失败，当前数据未改变"); }
 }
 
 async function settlePending(index, decision) {
@@ -672,6 +730,67 @@ async function importBackup(file) {
   }
 }
 
+function beginDragSort(event) {
+  const handle = event.target.closest("[data-drag-handle]");
+  if (!handle || event.button > 0) return;
+  const row = handle.closest("[data-sort-id]");
+  const list = row?.closest("[data-sort-list]");
+  if (!row || !list) return;
+  event.preventDefault();
+  dragSort = {
+    pointerId: event.pointerId,
+    row,
+    list,
+    kind: row.dataset.sortKind,
+    group: row.dataset.sortGroup,
+    moved: false
+  };
+  handle.setPointerCapture?.(event.pointerId);
+  row.classList.add("dragging");
+  document.body.classList.add("sorting");
+}
+
+function moveDragSort(event) {
+  if (!dragSort || event.pointerId !== dragSort.pointerId) return;
+  event.preventDefault();
+  if (event.clientY < 88) window.scrollBy(0, -10);
+  else if (event.clientY > window.innerHeight - 96) window.scrollBy(0, 10);
+  const target = document.elementFromPoint(event.clientX, event.clientY)?.closest("[data-sort-id]");
+  if (!target || target === dragSort.row || target.closest("[data-sort-list]") !== dragSort.list) return;
+  if (target.dataset.sortKind !== dragSort.kind || target.dataset.sortGroup !== dragSort.group) return;
+  const middle = target.getBoundingClientRect().top + target.getBoundingClientRect().height / 2;
+  if (event.clientY < middle) target.before(dragSort.row);
+  else target.after(dragSort.row);
+  dragSort.moved = true;
+}
+
+async function finishDragSort(event) {
+  if (!dragSort || event.pointerId !== dragSort.pointerId) return;
+  const current = dragSort;
+  dragSort = null;
+  current.row.classList.remove("dragging");
+  document.body.classList.remove("sorting");
+  if (event.type === "pointercancel") { render(); return; }
+  if (!current.moved) return;
+  const orderedIds = [...current.list.children]
+    .filter(item => item.dataset.sortKind === current.kind && item.dataset.sortGroup === current.group)
+    .map(item => item.dataset.sortId);
+  const collection = current.kind === "account" ? state.accounts : current.kind === "channel" ? state.channels : state.cycles;
+  orderedIds.forEach((id, order) => {
+    const item = collection.find(candidate => candidate.id === id);
+    if (item) item.order = order;
+  });
+  try {
+    await saveState(state);
+    render();
+    showToast("顺序已保存");
+  } catch {
+    state = await loadState() || state;
+    render();
+    showToast("排序保存失败");
+  }
+}
+
 function handleCycleDraftInput(event) {
   if (!dialogContent.querySelector("#cycle-form")) return;
   const input = event.target;
@@ -694,6 +813,10 @@ function handleCycleDraftInput(event) {
 
 app.addEventListener("click", handleClick);
 app.addEventListener("submit", handleSubmit);
+app.addEventListener("pointerdown", beginDragSort);
+window.addEventListener("pointermove", moveDragSort, { passive: false });
+window.addEventListener("pointerup", finishDragSort);
+window.addEventListener("pointercancel", finishDragSort);
 dialogContent.addEventListener("click", handleClick);
 dialogContent.addEventListener("submit", handleSubmit);
 dialogContent.addEventListener("change", handleCycleDraftInput);

@@ -1,24 +1,24 @@
 :root {
   color-scheme: light;
   --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Display", "PingFang SC", "Microsoft YaHei", sans-serif;
-  --color-bg: #f3f6fb;
+  --color-bg: #f4f4f4;
   --color-surface: #ffffff;
-  --color-surface-strong: #10192d;
-  --color-surface-soft: #edf3ff;
-  --color-text: #172033;
-  --color-text-soft: #6f788b;
+  --color-surface-strong: #151515;
+  --color-surface-soft: #eeeeef;
+  --color-text: #171717;
+  --color-text-soft: #6b6b6f;
   --color-text-inverse: #ffffff;
-  --color-line: #e3e8f1;
-  --color-primary: #315fe9;
-  --color-primary-strong: #2147bd;
-  --color-positive: #168667;
-  --color-positive-soft: #dff6ee;
-  --color-warning: #d67938;
-  --color-warning-soft: #fff0e2;
-  --color-danger: #c54955;
-  --color-danger-soft: #ffe9ec;
-  --shadow-card: 0 10px 28px rgba(28, 43, 79, 0.08);
-  --shadow-float: 0 12px 30px rgba(25, 51, 119, 0.24);
+  --color-line: #dddddf;
+  --color-primary: #242426;
+  --color-primary-strong: #050505;
+  --color-positive: #39705c;
+  --color-positive-soft: #e2f0ea;
+  --color-warning: #8a6039;
+  --color-warning-soft: #f5ebe1;
+  --color-danger: #a64049;
+  --color-danger-soft: #f5e5e7;
+  --shadow-card: 0 8px 24px rgba(0, 0, 0, 0.06);
+  --shadow-float: 0 12px 30px rgba(0, 0, 0, 0.22);
   --radius-sm: 10px;
   --radius-md: 16px;
   --radius-lg: 24px;
@@ -36,23 +36,23 @@
 @media (prefers-color-scheme: dark) {
   :root {
     color-scheme: dark;
-    --color-bg: #0c1220;
-    --color-surface: #141d2f;
-    --color-surface-strong: #e9eef8;
-    --color-surface-soft: #1c2942;
-    --color-text: #eef2fa;
-    --color-text-soft: #9aa6ba;
-    --color-text-inverse: #101726;
-    --color-line: #28354b;
-    --color-primary: #6f92ff;
-    --color-primary-strong: #8eabff;
+    --color-bg: #0f0f10;
+    --color-surface: #1a1a1b;
+    --color-surface-strong: #f2f2f2;
+    --color-surface-soft: #272729;
+    --color-text: #f1f1f1;
+    --color-text-soft: #a1a1a6;
+    --color-text-inverse: #151515;
+    --color-line: #343436;
+    --color-primary: #ededee;
+    --color-primary-strong: #ffffff;
     --color-positive: #55c6a0;
     --color-positive-soft: #173b34;
     --color-warning: #f0aa70;
     --color-warning-soft: #422e20;
     --color-danger: #ff8994;
     --color-danger-soft: #43252b;
-    --shadow-card: 0 10px 28px rgba(0, 0, 0, 0.2);
+    --shadow-card: 0 10px 28px rgba(0, 0, 0, 0.22);
     --shadow-float: 0 12px 30px rgba(0, 0, 0, 0.32);
   }
 }

@@ -1,7 +1,7 @@
-import { loadState, saveState, resetState } from "./db.js";
+import { loadState, saveState, replaceStateWithRecovery, loadRecoveryBackups } from "./db.js";
 import {
   uid, cents, yuan, isoToday, compareDate, within, daysInclusive, formatDate, cycleStatus,
-  seedState, accountById, channelById, cycleById, sortedAccounts, sortedChannels,
+  createInitialState, isUntouchedLegacySample, accountById, channelById, cycleById, sortedAccounts, sortedChannels,
   netTransactions, incomingCycleAdjustment, channelSnapshot, spendableRemaining,
   eligibleContexts, pendingSettlements, nextCycleForChannel
 } from "./model.js";
@@ -11,6 +11,8 @@ const dialog = document.querySelector("#app-dialog");
 const dialogContent = document.querySelector("#dialog-content");
 const toast = document.querySelector("#toast");
 let state;
+let recoveryBackups = [];
+let pendingImport = null;
 let currentView = "home";
 let toastTimer;
 
@@ -19,6 +21,7 @@ const money = value => `${value < 0 ? "-" : ""}¥${yuan(Math.abs(value))}`;
 const nowLabel = () => new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "short" }).format(new Date());
 const statusLabel = status => ({ active: "进行中", upcoming: "即将开始", ended: "已结束", archived: "已归档" })[status];
 const today = () => isoToday();
+const dateTimeLabel = value => new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 
 async function persist(message) {
   await saveState(state);
@@ -150,6 +153,7 @@ function renderTransaction(tx) {
 
 function renderManage() {
   const accounts = sortedAccounts(state);
+  const latestBackup = recoveryBackups[0];
   return `${header("统一管理", "账户、渠道和预算周期")}
     <section class="manage-section"><div class="section-heading"><div><h2>账户</h2><p>排序决定首页分组顺序</p></div><button class="small-add" data-action="add-account" type="button">＋ 新建</button></div>
       <div class="manage-list">${accounts.map((account, index) => renderManageAccount(account, index, accounts.length)).join("") || emptyState("暂无账户", "新建一个账户开始。")}</div></section>
@@ -157,8 +161,10 @@ function renderManage() {
       ${accounts.map(account => renderManageChannels(account)).join("")}</section>
     <section class="manage-section"><div class="section-heading"><div><h2>预算周期</h2><p>同一渠道不能进入重叠周期</p></div><button class="small-add" data-action="add-cycle" type="button">＋ 新建</button></div>
       <div class="manage-list">${state.cycles.slice().sort((a,b) => compareDate(b.start,a.start)).map(renderManageCycle).join("") || emptyState("暂无周期", "创建周期并为渠道分配预算。")}</div></section>
-    <section class="manage-section"><div class="section-heading"><div><h2>本地数据</h2><p>数据只保存在这台设备</p></div></div>
-      <div class="data-actions"><button class="secondary-button" data-action="export" type="button">导出备份</button><label class="secondary-button file-button">导入备份<input id="import-file" type="file" accept="application/json"></label><button class="text-danger" data-action="reset" type="button">恢复示例数据</button></div></section>`;
+    <section class="manage-section"><div class="section-heading"><div><h2>手动同步</h2><p>通过数据文件在手机和电脑之间转移</p></div></div>
+      <div class="data-actions"><button class="secondary-button" data-action="export" type="button">保存数据文件</button><label class="secondary-button file-button">导入并覆盖<input id="import-file" type="file" accept="application/json,.json"></label><button class="secondary-button" data-action="show-backups" type="button">恢复旧版本${recoveryBackups.length ? `（${recoveryBackups.length}）` : ""}</button></div>
+      <div class="sync-status"><strong>${latestBackup ? "最近自动备份" : "还没有自动备份"}</strong><span>${latestBackup ? `${dateTimeLabel(latestBackup.createdAt)} · ${h(latestBackup.reason)}` : "每次导入或重置前，当前数据都会先保存在这里。"}</span></div>
+      <button class="text-danger" data-action="reset" type="button">清空全部数据</button></section>`;
 }
 
 function renderManageAccount(account, index, total) {
@@ -470,9 +476,19 @@ async function handleClick(event) {
   if (action === "remove-segment") { syncCycleDraftFromForm(); cycleDraft.segments.splice(Number(button.dataset.index), 1); renderCycleDialog(); }
   if (action === "settle") await settlePending(Number(button.dataset.index), button.dataset.decision);
   if (action === "export") exportBackup();
+  if (action === "show-backups") await openRecoveryBackups();
+  if (action === "confirm-import") await applyPendingImport();
+  if (action === "restore-backup") await restoreRecoveryBackup(button.dataset.id);
   if (action === "reset") {
-    if (!confirm("确定清除当前数据并恢复示例吗？建议先导出备份。")) return;
-    await resetState(); state = seedState(); await persist("已恢复示例数据");
+    if (!confirm("确定清除这台设备上的全部数据吗？当前数据会先自动备份。")) return;
+    try {
+      const nextState = createInitialState();
+      await replaceStateWithRecovery(nextState, state, "清空前自动备份");
+      state = nextState;
+      recoveryBackups = await loadRecoveryBackups();
+      render();
+      showToast("本地数据已清空，可从旧版本恢复");
+    } catch { showToast("清空失败，当前数据未改变"); }
   }
 }
 
@@ -509,13 +525,79 @@ async function settlePending(index, decision) {
 }
 
 function exportBackup() {
-  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const payload = {
+    format: "budget-lens-sync",
+    version: 1,
+    exportedAt: new Date().toISOString(),
+    data: state
+  };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
   const link = document.createElement("a");
   link.href = URL.createObjectURL(blob);
-  link.download = `额度看板备份-${today()}.json`;
+  const now = new Date();
+  const clock = `${String(now.getHours()).padStart(2, "0")}${String(now.getMinutes()).padStart(2, "0")}`;
+  link.download = `额度看板同步-${today()}-${clock}.json`;
   link.click();
   URL.revokeObjectURL(link.href);
-  showToast("备份已导出");
+  showToast("数据文件已保存");
+}
+
+function normalizeImportedState(raw) {
+  const wrapped = raw?.format === "budget-lens-sync";
+  const candidate = wrapped ? raw.data : raw;
+  if (!candidate || typeof candidate !== "object" ||
+    !Array.isArray(candidate.accounts) || !Array.isArray(candidate.channels) ||
+    !Array.isArray(candidate.cycles) || !Array.isArray(candidate.transactions)) throw new Error("invalid data");
+  return {
+    state: {
+      ...candidate,
+      version: 2,
+      settlements: Array.isArray(candidate.settlements) ? candidate.settlements : [],
+      budgetChanges: Array.isArray(candidate.budgetChanges) ? candidate.budgetChanges : []
+    },
+    exportedAt: wrapped && raw.exportedAt ? raw.exportedAt : null
+  };
+}
+
+function dataSummary(data) {
+  return `${data.accounts.length}个账户 · ${data.channels.length}个渠道 · ${data.cycles.length}个周期 · ${data.transactions.length}条记录`;
+}
+
+async function openRecoveryBackups() {
+  recoveryBackups = await loadRecoveryBackups();
+  openDialog(`<section class="dialog-card">
+    <div class="dialog-head"><div><p class="dialog-kicker">本机安全机制</p><h2>恢复旧版本</h2></div><button class="dialog-close" data-action="close-dialog" type="button">×</button></div>
+    <p class="dialog-intro">导入或重置前的旧数据会留在这台设备。恢复某一版之前，当前版本也会再次自动备份。</p>
+    <div class="backup-list">${recoveryBackups.length ? recoveryBackups.map(item => `<article class="backup-card"><div><strong>${dateTimeLabel(item.createdAt)}</strong><span>${h(item.reason)}</span><small>${dataSummary(item.state)}</small></div><button class="secondary-button" data-action="restore-backup" data-id="${h(item.id)}" type="button">恢复这版</button></article>`).join("") : emptyState("还没有旧版本", "第一次导入或重置后，这里会出现自动备份。")}</div>
+  </section>`);
+}
+
+async function applyPendingImport() {
+  if (!pendingImport) return;
+  try {
+    const nextState = pendingImport.state;
+    await replaceStateWithRecovery(nextState, state, "导入前自动备份");
+    state = nextState;
+    pendingImport = null;
+    recoveryBackups = await loadRecoveryBackups();
+    closeDialog();
+    render();
+    showToast("导入完成，旧版本已自动备份");
+  } catch { showToast("导入失败，当前数据未改变"); }
+}
+
+async function restoreRecoveryBackup(id) {
+  const backup = recoveryBackups.find(item => item.id === id);
+  if (!backup || !confirm(`确定恢复 ${dateTimeLabel(backup.createdAt)} 的版本吗？当前版本也会先自动备份。`)) return;
+  try {
+    const nextState = normalizeImportedState(backup.state).state;
+    await replaceStateWithRecovery(nextState, state, "恢复旧版本前自动备份");
+    state = nextState;
+    recoveryBackups = await loadRecoveryBackups();
+    closeDialog();
+    render();
+    showToast("旧版本已恢复");
+  } catch { showToast("恢复失败，当前数据未改变"); }
 }
 
 function registerWebTools() {
@@ -575,10 +657,18 @@ function registerWebTools() {
 async function importBackup(file) {
   try {
     const parsed = JSON.parse(await file.text());
-    if (!parsed || !Array.isArray(parsed.accounts) || !Array.isArray(parsed.channels) || !Array.isArray(parsed.cycles) || !Array.isArray(parsed.transactions)) throw new Error();
-    state = { settlements: [], budgetChanges: [], ...parsed };
-    await persist("备份已恢复");
-  } catch { showToast("备份文件无效"); }
+    const normalized = normalizeImportedState(parsed);
+    pendingImport = normalized;
+    openDialog(`<section class="dialog-card">
+      <div class="dialog-head"><div><p class="dialog-kicker">手动同步</p><h2>确认导入并覆盖</h2></div><button class="dialog-close" data-action="close-dialog" type="button">×</button></div>
+      <div class="import-summary"><span>准备导入</span><strong>${h(file.name)}</strong><small>${dataSummary(normalized.state)}</small>${normalized.exportedAt ? `<small>文件保存于 ${dateTimeLabel(normalized.exportedAt)}</small>` : `<small>这是旧版备份文件，也可以正常导入</small>`}</div>
+      <p class="dialog-intro">导入后，这个文件的数据会完全替换本机当前数据。替换前会自动保存当前版本，之后可以随时恢复。</p>
+      <div class="dialog-actions"><button class="secondary-button" data-action="close-dialog" type="button">取消</button><button class="primary-button" data-action="confirm-import" type="button">确认覆盖</button></div>
+    </section>`);
+  } catch {
+    pendingImport = null;
+    showToast("数据文件无效，当前数据未改变");
+  }
 }
 
 function handleCycleDraftInput(event) {
@@ -610,13 +700,20 @@ dialogContent.addEventListener("input", event => {
   if (event.target.matches("[data-segment-index]")) syncCycleDraftFromForm();
 });
 dialog.addEventListener("click", event => { if (event.target === dialog) closeDialog(); });
-document.addEventListener("change", event => { if (event.target.id === "import-file" && event.target.files[0]) importBackup(event.target.files[0]); });
+document.addEventListener("change", event => {
+  if (event.target.id !== "import-file" || !event.target.files[0]) return;
+  importBackup(event.target.files[0]);
+  event.target.value = "";
+});
 
 async function init() {
-  state = await loadState() || seedState();
+  const storedState = await loadState();
+  state = !storedState || isUntouchedLegacySample(storedState) ? createInitialState() : storedState;
+  state.version = 2;
   state.settlements ||= [];
   state.budgetChanges ||= [];
   await saveState(state);
+  recoveryBackups = await loadRecoveryBackups();
   render();
   registerWebTools();
   if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});

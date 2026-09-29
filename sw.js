@@ -1,5 +1,5 @@
-const CACHE = "budget-lens-v14";
-const VERSION = "20260929-8";
+const CACHE = "budget-lens-v15";
+const VERSION = "20260929-9";
 const ASSETS = [
   "./",
   "./index.html",
@@ -16,8 +16,6 @@ self.addEventListener("activate", event => event.waitUntil(
   caches.keys()
     .then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))
     .then(() => self.clients.claim())
-    .then(() => self.clients.matchAll({ type: "window" }))
-    .then(clients => Promise.all(clients.map(client => client.navigate(client.url))))
 ));
 self.addEventListener("fetch", event => {
   if (event.request.method !== "GET") return;

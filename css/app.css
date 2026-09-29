@@ -1,4 +1,4 @@
-@import url("./tokens.css?v=20260929-3");
+@import url("./tokens.css?v=20260929-4");
 
 * { box-sizing: border-box; }
 html { background: var(--color-bg); }
@@ -200,8 +200,8 @@ body.sorting { user-select: none; }
 .form-grid .field:nth-child(-n+2) { grid-column: 1 / -1; }
 .cycle-form-grid { grid-template-columns: minmax(0, 1fr); gap: 0; }
 .cycle-form-grid .field { grid-column: auto; }
-.date-range-inputs { width: 100%; min-width: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
-.date-range-inputs input { min-width: 0; padding-inline: 8px; font-size: .82rem; }
+.date-range-inputs { width: 100%; min-width: 0; display: flex; gap: var(--space-2); }
+.date-range-inputs > input[type="date"] { flex: 1 1 0; width: 0; min-width: 0; max-width: none; padding-inline: 7px; overflow: hidden; -webkit-appearance: none; appearance: none; font-size: .82rem; }
 .date-range-inputs input::-webkit-date-and-time-value { min-width: 0; text-align: left; }
 .form-section { margin-top: var(--space-3); padding-top: var(--space-4); border-top: 1px solid var(--color-line); }
 .subheading strong { font-size: .9rem; }
@@ -210,6 +210,7 @@ body.sorting { user-select: none; }
 .segment-edit-heading span { color: var(--color-text-soft); font-size: .74rem; font-weight: 700; }
 .segment-edit-heading button { min-height: 28px; padding: 0 8px; border: 0; border-radius: 8px; color: var(--color-danger); background: var(--color-danger-soft); font-size: .68rem; }
 .segment-edit .date-range-inputs input { min-height: 48px; }
+.segment-edit .date-range-inputs input[readonly] { color: var(--color-text-soft); background: var(--color-surface-soft); }
 .allocation-list { display: grid; gap: var(--space-2); }
 .allocation-edit { padding: 12px; border: 1px solid var(--color-line); border-radius: 12px; background: var(--color-bg); }
 .allocation-edit.selected { border-color: color-mix(in srgb, var(--color-primary) 34%, var(--color-line)); background: var(--color-surface-soft); }
@@ -263,8 +264,7 @@ body.sorting { user-select: none; }
 @media (max-width: 420px) {
   .form-grid { grid-template-columns: 1fr; }
   .form-grid .field:nth-child(-n+2) { grid-column: auto; }
-  .date-range-inputs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .date-range-inputs input { padding-inline: 6px; font-size: .76rem; }
+  .date-range-inputs > input[type="date"] { padding-inline: 5px; font-size: .74rem; }
   .record-row { grid-template-columns: 40px minmax(0, 1fr) auto 28px; padding-left: 10px; }
   .data-actions > * { flex-basis: 100%; }
   .backup-card { align-items: stretch; flex-direction: column; }

@@ -1,13 +1,13 @@
 import {
   loadState, saveState, replaceStateWithRecovery, loadRecoveryBackups,
   getLastLoadInfo, getSafetyStatus, markDataExported
-} from "./db.js?v=20260929-9";
+} from "./db.js?v=20260929-10";
 import {
   uid, cents, yuan, isoToday, compareDate, within, daysInclusive, formatDate, cycleStatus,
   createInitialState, accountById, channelById, cycleById, sortedAccounts, sortedChannels,
   netTransactions, incomingCycleAdjustment, channelSnapshot, spendableRemaining,
   eligibleContexts, pendingSettlements, nextCycleForChannel
-} from "./model.js?v=20260929-9";
+} from "./model.js?v=20260929-10";
 
 const app = document.querySelector("#app");
 const dialog = document.querySelector("#app-dialog");
@@ -522,10 +522,17 @@ async function handleSubmit(event) {
     const accountId = kind === "channel" ? (data.get("accountId") || existing?.accountId) : null;
     const duplicate = list.some(item => item.id !== existing?.id && !item.archived && item.name === name && (kind === "account" || item.accountId === accountId));
     if (duplicate) return showToast("已有同名的可用项目");
-    if (existing) existing.name = name;
-    else list.push({ id: uid(kind === "account" ? "acc" : "ch"), name, accountId, order: kind === "account" ? state.accounts.length : state.channels.filter(item => item.accountId === accountId).length, archived: false, createdAt: new Date().toISOString() });
+    if (existing) {
+      existing.name = name;
+      if (kind === "channel" && existing.accountId !== accountId) {
+        existing.accountId = accountId;
+        existing.order = state.channels.filter(item => item.id !== existing.id && item.accountId === accountId).length;
+      }
+    } else {
+      list.push({ id: uid(kind === "account" ? "acc" : "ch"), name, accountId, order: kind === "account" ? state.accounts.length : state.channels.filter(item => item.accountId === accountId).length, archived: false, createdAt: new Date().toISOString() });
+    }
     closeDialog();
-    await persist(existing ? "名称已更新" : "已创建");
+    await persist(existing ? (kind === "channel" ? "渠道信息已更新" : "名称已更新") : "已创建");
   }
   if (formId === "cycle-form") {
     event.preventDefault();
@@ -1075,7 +1082,7 @@ async function init() {
   registerWebTools();
   if (loadInfo.recovered) showToast(loadInfo.source === "mirror" ? "已从本地镜像恢复数据" : "已从最近自动版本恢复数据");
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js?v=20260929-9", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./sw.js?v=20260929-10", { updateViaCache: "none" })
       .then(registration => {
         registration.addEventListener("updatefound", () => {
           const worker = registration.installing;

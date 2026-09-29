@@ -1,5 +1,5 @@
-const CACHE = "budget-lens-v15";
-const VERSION = "20260929-9";
+const CACHE = "budget-lens-v16";
+const VERSION = "20260929-10";
 const ASSETS = [
   "./",
   "./index.html",

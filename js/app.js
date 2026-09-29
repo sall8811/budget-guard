@@ -1,10 +1,10 @@
-import { loadState, saveState, replaceStateWithRecovery, loadRecoveryBackups } from "./db.js?v=20260929-2";
+import { loadState, saveState, replaceStateWithRecovery, loadRecoveryBackups } from "./db.js?v=20260929-3";
 import {
   uid, cents, yuan, isoToday, compareDate, within, daysInclusive, formatDate, cycleStatus,
   createInitialState, isUntouchedLegacySample, accountById, channelById, cycleById, sortedAccounts, sortedChannels,
   netTransactions, incomingCycleAdjustment, channelSnapshot, spendableRemaining,
   eligibleContexts, pendingSettlements, nextCycleForChannel
-} from "./model.js?v=20260929-2";
+} from "./model.js?v=20260929-3";
 
 const app = document.querySelector("#app");
 const dialog = document.querySelector("#app-dialog");
@@ -290,14 +290,14 @@ function openCycleDialog(existing = null) {
 function renderCycleDialog() {
   const accounts = sortedAccounts(state).filter(item => !item.archived);
   const channels = sortedChannels(state, cycleDraft.accountId).filter(item => !item.archived);
+  cycleDraft.segments.forEach((segment, index) => { segment.name = `第${index + 1}分段`; });
   openDialog(`<form id="cycle-form" class="dialog-card wide-dialog">
     <div class="dialog-head"><div><p class="dialog-kicker">预算设置</p><h2 id="dialog-title">${cycleDraft.id ? "编辑" : "新建"}预算周期</h2></div><button class="dialog-close" data-action="close-dialog" type="button">×</button></div>
-    <div class="form-grid"><label class="field"><span>所属账户</span><select name="accountId" ${cycleDraft.id ? "disabled" : ""}>${accounts.map(account => `<option value="${account.id}" ${cycleDraft.accountId === account.id ? "selected" : ""}>${h(account.name)}</option>`).join("")}</select></label>
-    <label class="field"><span>周期名称</span><input name="name" value="${h(cycleDraft.name)}" maxlength="30" placeholder="例如：日常开销" required></label>
-    <label class="field"><span>开始日期</span><input name="start" type="date" value="${cycleDraft.start}" required></label>
-    <label class="field"><span>结束日期</span><input name="end" type="date" value="${cycleDraft.end}" required></label></div>
+    <div class="form-grid cycle-form-grid"><label class="field"><span>周期名称</span><input name="name" value="${h(cycleDraft.name)}" maxlength="30" placeholder="例如：日常开销" required></label>
+    <label class="field"><span>所属账户</span><select name="accountId" ${cycleDraft.id ? "disabled" : ""}>${accounts.map(account => `<option value="${account.id}" ${cycleDraft.accountId === account.id ? "selected" : ""}>${h(account.name)}</option>`).join("")}</select></label>
+    <div class="field date-range-field"><span>起止日期</span><div class="date-range-inputs"><input name="start" type="date" value="${cycleDraft.start}" aria-label="开始日期" required><input name="end" type="date" value="${cycleDraft.end}" aria-label="结束日期" required></div></div></div>
     <div class="form-section"><div class="subheading"><div><strong>统一分段</strong><span>选择分段的渠道都会使用这些日期</span></div><button class="small-add" data-action="add-segment" type="button">＋ 分段</button></div>
-      <div id="segment-fields">${cycleDraft.segments.length ? cycleDraft.segments.map((segment, index) => `<div class="segment-edit"><input data-segment-index="${index}" data-key="name" value="${h(segment.name)}" aria-label="分段名称"><input data-segment-index="${index}" data-key="start" type="date" value="${segment.start}" aria-label="开始日期"><input data-segment-index="${index}" data-key="end" type="date" value="${segment.end}" aria-label="结束日期"><button data-action="remove-segment" data-index="${index}" type="button">×</button></div>`).join("") : `<p class="form-note">不需要分段可以留空。</p>`}</div>
+      <div id="segment-fields">${cycleDraft.segments.length ? cycleDraft.segments.map((segment, index) => `<div class="segment-edit"><div class="segment-edit-heading"><span>${h(segment.name)}</span><button data-action="remove-segment" data-index="${index}" type="button" aria-label="删除${h(segment.name)}">删除</button></div><input data-segment-index="${index}" data-key="name" type="hidden" value="${h(segment.name)}"><div class="date-range-inputs"><input data-segment-index="${index}" data-key="start" type="date" value="${segment.start}" aria-label="${h(segment.name)}开始日期"><input data-segment-index="${index}" data-key="end" type="date" value="${segment.end}" aria-label="${h(segment.name)}结束日期"></div></div>`).join("") : `<p class="form-note">不需要分段可以留空。</p>`}</div>
     </div>
     <div class="form-section"><div class="subheading"><div><strong>渠道预算</strong><span>至少选择一个渠道</span></div></div>
       <div class="allocation-list">${channels.length ? channels.map(channel => renderAllocationDraft(channel)).join("") : `<p class="form-note">该账户还没有可用渠道。</p>`}</div>
@@ -841,7 +841,7 @@ async function init() {
   render();
   registerWebTools();
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js?v=20260929-2", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./sw.js?v=20260929-3", { updateViaCache: "none" })
       .then(registration => registration.update())
       .catch(() => {});
   }

@@ -27,6 +27,7 @@ export const cycleStatus = (cycle, today = isoToday()) => {
 export function createInitialState() {
   return {
     version: 2,
+    revision: 0,
     accounts: [],
     channels: [],
     cycles: [],

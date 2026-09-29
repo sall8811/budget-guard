@@ -1,10 +1,10 @@
-import { loadState, saveState, replaceStateWithRecovery, loadRecoveryBackups } from "./db.js?v=20260929-4";
+import { loadState, saveState, replaceStateWithRecovery, loadRecoveryBackups } from "./db.js?v=20260929-5";
 import {
   uid, cents, yuan, isoToday, compareDate, within, daysInclusive, formatDate, cycleStatus,
   createInitialState, isUntouchedLegacySample, accountById, channelById, cycleById, sortedAccounts, sortedChannels,
   netTransactions, incomingCycleAdjustment, channelSnapshot, spendableRemaining,
   eligibleContexts, pendingSettlements, nextCycleForChannel
-} from "./model.js?v=20260929-4";
+} from "./model.js?v=20260929-5";
 
 const app = document.querySelector("#app");
 const dialog = document.querySelector("#app-dialog");
@@ -175,8 +175,8 @@ function dragHandle(label) {
 function renderManageAccount(account) {
   const linked = state.cycles.some(cycle => cycle.accountId === account.id && !cycle.archived);
   const sortable = !account.archived;
-  return `<article class="manage-row ${account.archived ? "archived" : ""}" ${sortable ? `data-sort-kind="account" data-sort-group="accounts" data-sort-id="${account.id}"` : ""}>${sortable ? dragHandle(account.name) : ""}<div class="manage-row-info"><strong>${h(account.name)}</strong><span>${account.archived ? "已归档 · 只读" : "可用"}</span></div>
-    <div class="row-actions">${sortable ? `<button data-action="edit-account" data-id="${account.id}" type="button">编辑</button>` : ""}<button data-action="toggle-account" data-id="${account.id}" data-linked="${linked}" type="button">${account.archived ? "恢复" : "归档"}</button></div></article>`;
+  return `<article class="manage-row entity-manage-row ${account.archived ? "archived" : ""}" ${sortable ? `data-sort-kind="account" data-sort-group="accounts" data-sort-id="${account.id}"` : ""}>${sortable ? dragHandle(account.name) : ""}<div class="manage-row-info"><strong>${h(account.name)}</strong></div>
+    <div class="row-actions">${sortable ? `<button data-action="edit-account" data-id="${account.id}" type="button">编辑</button>` : ""}<button data-action="toggle-account" data-id="${account.id}" data-linked="${linked}" type="button">${account.archived ? "恢复" : "归档"}</button><button class="danger-action" data-action="delete-account" data-id="${account.id}" type="button">删除</button></div></article>`;
 }
 
 function renderManageChannels(account) {
@@ -185,7 +185,7 @@ function renderManageChannels(account) {
   return `<div class="manage-group"><h3>${h(account.name)}${account.archived ? " · 已归档" : ""}</h3><div class="manage-list" data-sort-list>${channels.map(channel => {
     const used = state.cycles.some(cycle => !cycle.archived && cycle.allocations.some(a => a.channelId === channel.id));
     const sortable = !channel.archived && !account.archived;
-    return `<article class="manage-row ${channel.archived ? "archived" : ""}" ${sortable ? `data-sort-kind="channel" data-sort-group="channels-${account.id}" data-sort-id="${channel.id}"` : ""}>${sortable ? dragHandle(channel.name) : ""}<div class="manage-row-info"><strong>${h(channel.name)}</strong><span>${channel.archived ? "已归档 · 只读" : "可用"}</span></div><div class="row-actions">${sortable ? `<button data-action="edit-channel" data-id="${channel.id}" type="button">编辑</button>` : ""}<button data-action="toggle-channel" data-id="${channel.id}" data-used="${used}" type="button">${channel.archived ? "恢复" : "归档"}</button></div></article>`;
+    return `<article class="manage-row entity-manage-row ${channel.archived ? "archived" : ""}" ${sortable ? `data-sort-kind="channel" data-sort-group="channels-${account.id}" data-sort-id="${channel.id}"` : ""}>${sortable ? dragHandle(channel.name) : ""}<div class="manage-row-info"><strong>${h(channel.name)}</strong></div><div class="row-actions">${sortable ? `<button data-action="edit-channel" data-id="${channel.id}" type="button">编辑</button>` : ""}<button data-action="toggle-channel" data-id="${channel.id}" data-used="${used}" type="button">${channel.archived ? "恢复" : "归档"}</button><button class="danger-action" data-action="delete-channel" data-id="${channel.id}" type="button">删除</button></div></article>`;
   }).join("")}</div></div>`;
 }
 
@@ -202,7 +202,7 @@ function renderManageCycles(account) {
 function renderManageCycle(cycle) {
   const status = cycleStatus(cycle);
   const sortable = !cycle.archived && ["active", "upcoming"].includes(status);
-  return `<article class="manage-row ${cycle.archived ? "archived" : ""}" ${sortable ? `data-sort-kind="cycle" data-sort-group="cycles-${cycle.accountId}-${status}" data-sort-id="${cycle.id}"` : ""}>${sortable ? dragHandle(cycle.name) : ""}<div class="manage-row-info"><strong>${h(cycle.name)}</strong><span>${formatDate(cycle.start)}—${formatDate(cycle.end)} · ${statusLabel(status)}</span></div><div class="row-actions">${cycle.archived ? `<button data-action="restore-cycle" data-id="${cycle.id}" type="button">恢复</button>` : `<button data-action="edit-cycle" data-id="${cycle.id}" type="button">编辑</button><button class="danger-action" data-action="delete-cycle" data-id="${cycle.id}" type="button">删除</button>${status === "ended" ? `<button data-action="archive-cycle" data-cycle-id="${cycle.id}" type="button">归档</button>` : ""}`}</div></article>`;
+  return `<article class="manage-row ${cycle.archived ? "archived" : ""}" ${sortable ? `data-sort-kind="cycle" data-sort-group="cycles-${cycle.accountId}-${status}" data-sort-id="${cycle.id}"` : ""}>${sortable ? dragHandle(cycle.name) : ""}<div class="manage-row-info"><strong>${h(cycle.name)}</strong><span>${formatDate(cycle.start)}—${formatDate(cycle.end)} · ${statusLabel(status)}</span></div><div class="row-actions">${cycle.archived ? `<button data-action="restore-cycle" data-id="${cycle.id}" type="button">恢复</button><button class="danger-action" data-action="delete-cycle" data-id="${cycle.id}" type="button">删除</button>` : `<button data-action="edit-cycle" data-id="${cycle.id}" type="button">编辑</button><button class="danger-action" data-action="delete-cycle" data-id="${cycle.id}" type="button">删除</button>${status === "ended" ? `<button data-action="archive-cycle" data-cycle-id="${cycle.id}" type="button">归档</button>` : ""}`}</div></article>`;
 }
 
 function emptyState(title, text) {
@@ -250,7 +250,7 @@ function invalidateSettlements(cycleId, channelId) {
 function openEntityDialog(kind, existing = null) {
   const isAccount = kind === "account";
   const accounts = sortedAccounts(state).filter(item => !item.archived);
-  openDialog(`<form id="entity-form" class="dialog-card" data-kind="${kind}">
+  openDialog(`<form id="entity-form" class="dialog-card entity-dialog" data-kind="${kind}">
     <div class="dialog-head"><div><p class="dialog-kicker">统一管理</p><h2 id="dialog-title">${existing ? "修改" : "新建"}${isAccount ? "账户" : "开销渠道"}</h2></div><button class="dialog-close" data-action="close-dialog" type="button">×</button></div>
     <input type="hidden" name="id" value="${existing?.id || ""}">
     <label class="field"><span>${isAccount ? "账户名称" : "渠道名称"}</span><input name="name" value="${h(existing?.name || "")}" maxlength="30" required></label>
@@ -521,6 +521,8 @@ async function handleClick(event) {
   if (action === "add-channel") openEntityDialog("channel");
   if (action === "edit-account") openEntityDialog("account", accountById(state, button.dataset.id));
   if (action === "edit-channel") openEntityDialog("channel", channelById(state, button.dataset.id));
+  if (action === "delete-account") await deleteAccount(button.dataset.id);
+  if (action === "delete-channel") await deleteChannel(button.dataset.id);
   if (action === "add-cycle") openCycleDialog();
   if (action === "edit-cycle") openCycleDialog(cycleById(state, button.dataset.id));
   if (action === "delete-cycle") await deleteBudgetCycle(button.dataset.id);
@@ -598,7 +600,7 @@ async function archiveCycle(cycleId) {
 
 async function deleteBudgetCycle(cycleId) {
   const cycle = cycleById(state, cycleId);
-  if (!cycle || cycle.archived) return showToast("请先恢复已归档周期再删除");
+  if (!cycle) return;
   const recordCount = state.transactions.filter(transaction => transaction.cycleId === cycleId).length;
   const message = recordCount
     ? `确定删除“${cycle.name}”吗？其中的${recordCount}条支出或退款记录也会删除。删除前会自动备份。`
@@ -615,6 +617,54 @@ async function deleteBudgetCycle(cycleId) {
     recoveryBackups = await loadRecoveryBackups();
     render();
     showToast("预算周期已删除，可从旧版本恢复");
+  } catch { showToast("删除失败，当前数据未改变"); }
+}
+
+async function deleteAccount(accountId) {
+  const account = accountById(state, accountId);
+  if (!account) return;
+  const channelIds = new Set(state.channels.filter(channel => channel.accountId === accountId).map(channel => channel.id));
+  const cycleIds = new Set(state.cycles.filter(cycle => cycle.accountId === accountId).map(cycle => cycle.id));
+  const recordCount = state.transactions.filter(transaction => cycleIds.has(transaction.cycleId) || channelIds.has(transaction.channelId)).length;
+  const details = [channelIds.size ? `${channelIds.size}个渠道` : "", cycleIds.size ? `${cycleIds.size}个周期` : "", recordCount ? `${recordCount}条记录` : ""].filter(Boolean).join("、");
+  if (!confirm(`确定删除账户“${account.name}”吗？${details ? `关联的${details}也会删除。` : ""}删除前会自动备份。`)) return;
+  try {
+    const nextState = JSON.parse(JSON.stringify(state));
+    nextState.accounts = nextState.accounts.filter(item => item.id !== accountId);
+    nextState.channels = nextState.channels.filter(channel => channel.accountId !== accountId);
+    nextState.cycles = nextState.cycles.filter(cycle => cycle.accountId !== accountId);
+    nextState.transactions = nextState.transactions.filter(transaction => !cycleIds.has(transaction.cycleId) && !channelIds.has(transaction.channelId));
+    nextState.settlements = nextState.settlements.filter(settlement => !cycleIds.has(settlement.cycleId) && !cycleIds.has(settlement.targetCycleId) && !channelIds.has(settlement.channelId));
+    nextState.budgetChanges = nextState.budgetChanges.filter(change => !cycleIds.has(change.cycleId) && !channelIds.has(change.channelId));
+    await replaceStateWithRecovery(nextState, state, "删除账户前自动备份");
+    state = nextState;
+    recoveryBackups = await loadRecoveryBackups();
+    render();
+    showToast("账户已删除，可从旧版本恢复");
+  } catch { showToast("删除失败，当前数据未改变"); }
+}
+
+async function deleteChannel(channelId) {
+  const channel = channelById(state, channelId);
+  if (!channel) return;
+  const affectedCycles = state.cycles.filter(cycle => cycle.allocations.some(allocation => allocation.channelId === channelId));
+  const recordCount = state.transactions.filter(transaction => transaction.channelId === channelId).length;
+  const emptyCycleIds = new Set(affectedCycles.filter(cycle => cycle.allocations.length === 1).map(cycle => cycle.id));
+  const details = [affectedCycles.length ? `${affectedCycles.length}个周期中的预算` : "", recordCount ? `${recordCount}条记录` : "", emptyCycleIds.size ? `${emptyCycleIds.size}个无其他渠道的周期` : ""].filter(Boolean).join("、");
+  if (!confirm(`确定删除开销渠道“${channel.name}”吗？${details ? `同时会删除${details}。` : ""}删除前会自动备份。`)) return;
+  try {
+    const nextState = JSON.parse(JSON.stringify(state));
+    nextState.channels = nextState.channels.filter(item => item.id !== channelId);
+    nextState.cycles.forEach(cycle => { cycle.allocations = cycle.allocations.filter(allocation => allocation.channelId !== channelId); });
+    nextState.cycles = nextState.cycles.filter(cycle => !emptyCycleIds.has(cycle.id));
+    nextState.transactions = nextState.transactions.filter(transaction => transaction.channelId !== channelId && !emptyCycleIds.has(transaction.cycleId));
+    nextState.settlements = nextState.settlements.filter(settlement => settlement.channelId !== channelId && !emptyCycleIds.has(settlement.cycleId) && !emptyCycleIds.has(settlement.targetCycleId));
+    nextState.budgetChanges = nextState.budgetChanges.filter(change => change.channelId !== channelId && !emptyCycleIds.has(change.cycleId));
+    await replaceStateWithRecovery(nextState, state, "删除开销渠道前自动备份");
+    state = nextState;
+    recoveryBackups = await loadRecoveryBackups();
+    render();
+    showToast("开销渠道已删除，可从旧版本恢复");
   } catch { showToast("删除失败，当前数据未改变"); }
 }
 
@@ -921,7 +971,7 @@ async function init() {
   render();
   registerWebTools();
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js?v=20260929-4", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./sw.js?v=20260929-5", { updateViaCache: "none" })
       .then(registration => registration.update())
       .catch(() => {});
   }

@@ -1,10 +1,10 @@
-import { loadState, saveState, replaceStateWithRecovery, loadRecoveryBackups } from "./db.js?v=20260929-7";
+import { loadState, saveState, replaceStateWithRecovery, loadRecoveryBackups } from "./db.js?v=20260929-8";
 import {
   uid, cents, yuan, isoToday, compareDate, within, daysInclusive, formatDate, cycleStatus,
   createInitialState, isUntouchedLegacySample, accountById, channelById, cycleById, sortedAccounts, sortedChannels,
   netTransactions, incomingCycleAdjustment, channelSnapshot, spendableRemaining,
   eligibleContexts, pendingSettlements, nextCycleForChannel
-} from "./model.js?v=20260929-7";
+} from "./model.js?v=20260929-8";
 
 const app = document.querySelector("#app");
 const dialog = document.querySelector("#app-dialog");
@@ -431,13 +431,21 @@ function openChannelDetail(cycleId, channelId) {
   const allocation = cycle?.allocations.find(item => item.channelId === channelId);
   if (!cycle || !channel || !allocation) return;
   const snapshot = channelSnapshot(state, cycle, allocation);
+  const totalSpent = netTransactions(state, cycle.id, allocation.channelId);
+  const totalBudget = allocation.totalBudget + incomingCycleAdjustment(state, cycle, allocation.channelId);
+  const totalRemaining = totalBudget - totalSpent;
+  const records = state.transactions
+    .filter(item => item.cycleId === cycleId && item.channelId === channelId)
+    .sort((a, b) => compareDate(b.date, a.date) || b.createdAt.localeCompare(a.createdAt));
   const history = state.budgetChanges.filter(item => item.cycleId === cycleId && item.channelId === channelId).sort((a,b) => b.createdAt.localeCompare(a.createdAt));
   const adjustable = ["active", "upcoming"].includes(cycleStatus(cycle)) && !cycle.archived;
-  openDialog(`<div class="dialog-card">
+  const hasCurrentSegment = allocation.segmented && snapshot.segment;
+  openDialog(`<div class="dialog-card channel-detail-dialog">
     <div class="dialog-head"><div><p class="dialog-kicker">${h(accountById(state, cycle.accountId)?.name)} · ${h(cycle.name)}</p><h2 id="dialog-title">${h(channel.name)}</h2></div><button class="dialog-close" data-action="close-dialog" type="button">×</button></div>
-    <div class="detail-balance"><span>${snapshot.scope === "segment" ? `${h(snapshot.segment?.name)}剩余` : "大周期剩余"}</span><strong>${money(snapshot.remaining)}</strong><small>${snapshot.days}天 · 每天 ${money(snapshot.daily)}</small></div>
-    ${adjustable ? `<form id="budget-form" data-cycle-id="${cycle.id}" data-channel-id="${channel.id}"><label class="field"><span>把当前剩余额度调整为</span><input name="target" inputmode="decimal" min="0" step="0.01" value="${Math.max(0, snapshot.remaining) / 100}" required></label><button class="primary-button full" type="submit">保存预算调整</button></form>` : ""}
-    <div class="history-block"><h3>预算修改历史</h3>${history.length ? history.map(item => `<div><span>${new Date(item.createdAt).toLocaleString("zh-CN", { month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" })}</span><strong>${item.delta >= 0 ? "+" : "-"}${money(Math.abs(item.delta))}</strong></div>`).join("") : `<p class="form-note">还没有修改记录。</p>`}</div>
+    <div class="detail-summary ${hasCurrentSegment ? "" : "single"}"><div><span>本周期总剩余</span><strong class="${totalRemaining < 0 ? "danger-text" : ""}">${money(totalRemaining)}</strong><small>总预算 ${money(totalBudget)} · 已支出 ${money(totalSpent)}</small></div>${hasCurrentSegment ? `<div><span>${h(snapshot.segment.name)}剩余</span><strong class="${snapshot.remaining < 0 ? "danger-text" : ""}">${money(snapshot.remaining)}</strong><small>${snapshot.days}天 · 每天 ${money(snapshot.daily)}</small></div>` : ""}</div>
+    ${adjustable ? `<form id="budget-form" class="budget-adjust-row" data-cycle-id="${cycle.id}" data-channel-id="${channel.id}"><label><span>${hasCurrentSegment ? "调整当前分段剩余" : "调整剩余额度"}</span><input name="target" inputmode="decimal" min="0" step="0.01" value="${Math.max(0, snapshot.remaining) / 100}" required></label><button class="primary-button compact" type="submit">保存</button></form>` : ""}
+    <section class="detail-records"><div class="detail-section-title"><h3>本周期记录</h3><span>${records.length}条</span></div><div class="detail-record-list">${records.length ? records.map(item => `<button class="detail-record" data-action="edit-record" data-id="${item.id}" type="button"><span><strong>${formatDate(item.date)}</strong>${item.note ? `<small>${h(item.note)}</small>` : ""}</span><span class="detail-record-amount ${item.type}"><strong>${item.type === "refund" ? "+" : "-"}${money(item.amount)}</strong><small>${item.type === "refund" ? "退款" : "支出"}</small></span></button>`).join("") : `<p class="form-note">这个周期还没有记录。</p>`}</div></section>
+    <section class="history-block budget-history"><h3>预算修改历史</h3>${history.length ? history.map(item => `<div class="history-row"><span>${new Date(item.createdAt).toLocaleString("zh-CN", { month:"numeric", day:"numeric", hour:"2-digit", minute:"2-digit" })}</span><strong>${item.delta >= 0 ? "+" : "-"}${money(Math.abs(item.delta))}</strong>${adjustable ? `<button class="history-delete" data-action="delete-budget-change" data-id="${item.id}" data-cycle-id="${cycle.id}" data-channel-id="${channel.id}" type="button">删除</button>` : ""}</div>`).join("") : `<p class="form-note">还没有修改记录。</p>`}</section>
   </div>`);
 }
 
@@ -515,12 +523,15 @@ async function handleSubmit(event) {
     const snapshot = channelSnapshot(state, cycle, allocation);
     const target = cents(new FormData(form).get("target"));
     const delta = target - snapshot.remaining;
+    if (!delta) return showToast("额度没有变化");
     if (allocation.segmented && snapshot.segment) allocation.segmentBudgets[snapshot.segment.id] += delta;
     allocation.totalBudget += delta;
     state.budgetChanges.push({ id: uid("chg"), cycleId: cycle.id, channelId: allocation.channelId, segmentId: snapshot.segment?.id || null, delta, createdAt: new Date().toISOString() });
     invalidateSettlements(cycle.id, allocation.channelId);
-    closeDialog();
-    await persist(`预算已${delta >= 0 ? "增加" : "减少"}${money(Math.abs(delta))}`);
+    await saveState(state);
+    render();
+    openChannelDetail(cycle.id, allocation.channelId);
+    showToast(`预算已${delta >= 0 ? "增加" : "减少"}${money(Math.abs(delta))}`);
   }
 }
 
@@ -552,6 +563,7 @@ async function handleClick(event) {
     invalidateSettlements(tx.cycleId, tx.channelId);
     closeDialog(); await persist("记录已删除");
   }
+  if (action === "delete-budget-change") await deleteBudgetChange(button.dataset.id, button.dataset.cycleId, button.dataset.channelId);
   if (action === "toggle-account") {
     const account = accountById(state, button.dataset.id);
     if (!account.archived && button.dataset.linked === "true") return showToast("请先归档该账户下的周期");
@@ -605,6 +617,25 @@ async function handleClick(event) {
       showToast("本地数据已清空，可从旧版本恢复");
     } catch { showToast("清空失败，当前数据未改变"); }
   }
+}
+
+async function deleteBudgetChange(changeId, cycleId, channelId) {
+  const change = state.budgetChanges.find(item => item.id === changeId && item.cycleId === cycleId && item.channelId === channelId);
+  const cycle = cycleById(state, cycleId);
+  const allocation = cycle?.allocations.find(item => item.channelId === channelId);
+  if (!change || !cycle || !allocation) return showToast("这条修改记录已不存在");
+  if (cycle.archived || !["active", "upcoming"].includes(cycleStatus(cycle))) return showToast("当前周期不可修改");
+  if (!confirm("确定删除这条预算修改吗？额度会同步撤销这次调整。")) return;
+  allocation.totalBudget -= change.delta;
+  if (change.segmentId && allocation.segmented && Object.prototype.hasOwnProperty.call(allocation.segmentBudgets, change.segmentId)) {
+    allocation.segmentBudgets[change.segmentId] -= change.delta;
+  }
+  state.budgetChanges = state.budgetChanges.filter(item => item.id !== changeId);
+  invalidateSettlements(cycleId, channelId);
+  await saveState(state);
+  render();
+  openChannelDetail(cycleId, channelId);
+  showToast("预算修改已撤销");
 }
 
 async function archiveCycle(cycleId) {
@@ -989,7 +1020,7 @@ async function init() {
   render();
   registerWebTools();
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js?v=20260929-7", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./sw.js?v=20260929-8", { updateViaCache: "none" })
       .then(registration => registration.update())
       .catch(() => {});
   }

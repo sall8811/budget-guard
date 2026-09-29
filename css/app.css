@@ -1,4 +1,4 @@
-@import url("./tokens.css?v=20260929-7");
+@import url("./tokens.css?v=20260929-8");
 
 * { box-sizing: border-box; }
 html { background: var(--color-bg); }
@@ -250,14 +250,34 @@ body.sorting { user-select: none; }
 .segment-budget-list label { display: grid; gap: 4px; }
 .segment-budget-list span { color: var(--color-text-soft); font-size: .68rem; }
 .segment-budget-list input { min-height: 40px; background: var(--color-surface); }
-.detail-balance { margin-bottom: var(--space-5); padding: var(--space-5); display: grid; gap: 2px; border-radius: var(--radius-md); color: #fff; background: #222224; }
-.detail-balance span { opacity: .7; font-size: .74rem; }
-.detail-balance strong { font-size: 2rem; letter-spacing: -.04em; }
-.detail-balance small { opacity: .75; font-size: .75rem; }
+.channel-detail-dialog .dialog-head { margin-bottom: var(--space-4); }
+.detail-summary { margin-bottom: var(--space-3); display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+.detail-summary.single { grid-template-columns: 1fr; }
+.detail-summary > div { min-width: 0; padding: 12px; display: grid; gap: 2px; border: 1px solid var(--color-line); border-radius: var(--radius-sm); background: var(--color-bg); }
+.detail-summary span, .detail-summary small { overflow: hidden; color: var(--color-text-soft); font-size: .68rem; text-overflow: ellipsis; white-space: nowrap; }
+.detail-summary strong { font-size: 1.18rem; letter-spacing: -.025em; }
+.budget-adjust-row { min-width: 0; padding: 10px; display: flex; align-items: end; gap: var(--space-2); border: 1px solid var(--color-line); border-radius: var(--radius-sm); }
+.budget-adjust-row label { min-width: 0; flex: 1 1 auto; display: grid; gap: 5px; }
+.budget-adjust-row label > span { color: var(--color-text-soft); font-size: .7rem; font-weight: 650; }
+.budget-adjust-row input { width: 100%; min-width: 0; height: 38px; padding: 0 10px; border: 1px solid var(--color-line); border-radius: 8px; color: var(--color-text); background: var(--color-bg); }
+.budget-adjust-row button { flex: 0 0 auto; min-height: 38px; border-radius: 8px; }
+.detail-records { margin-top: var(--space-5); }
+.detail-section-title { margin-bottom: var(--space-2); display: flex; align-items: center; justify-content: space-between; }
+.detail-section-title h3, .history-block h3 { margin: 0; font-size: .86rem; }
+.detail-section-title span { color: var(--color-text-soft); font-size: .7rem; }
+.detail-record-list { display: grid; }
+.detail-record { width: 100%; min-width: 0; min-height: 48px; padding: 8px 2px; display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); border: 0; border-bottom: 1px solid var(--color-line); color: var(--color-text); background: transparent; text-align: left; }
+.detail-record > span:first-child { min-width: 0; display: grid; gap: 2px; }
+.detail-record > span:first-child strong { font-size: .78rem; }
+.detail-record small { overflow: hidden; color: var(--color-text-soft); font-size: .68rem; text-overflow: ellipsis; white-space: nowrap; }
+.detail-record-amount { flex: 0 0 auto; display: grid; justify-items: end; gap: 1px; }
+.detail-record-amount > strong { font-size: .82rem; }
+.detail-record-amount.refund > strong { color: var(--color-positive); }
 .history-block { margin-top: var(--space-5); padding-top: var(--space-4); border-top: 1px solid var(--color-line); }
-.history-block h3 { margin: 0 0 var(--space-3); font-size: .86rem; }
-.history-block > div { min-height: 38px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--color-line); font-size: .76rem; }
+.history-block h3 { margin-bottom: var(--space-2); }
+.history-row { min-height: 38px; display: grid; grid-template-columns: minmax(0, 1fr) auto auto; align-items: center; gap: var(--space-2); border-bottom: 1px solid var(--color-line); font-size: .76rem; }
 .history-block span { color: var(--color-text-soft); }
+.history-delete { min-height: 30px; padding: 0 7px; border: 0; border-radius: 7px; color: var(--color-danger); background: var(--color-danger-soft); font-size: .68rem; }
 .dialog-intro { margin: 0 0 var(--space-4); color: var(--color-text-soft); font-size: .8rem; line-height: 1.6; }
 .import-summary { margin-bottom: var(--space-4); padding: var(--space-4); display: grid; gap: 4px; border: 1px solid color-mix(in srgb, var(--color-primary) 24%, var(--color-line)); border-radius: var(--radius-md); background: var(--color-surface-soft); }
 .import-summary span { color: var(--color-primary); font-size: .7rem; font-weight: 750; }

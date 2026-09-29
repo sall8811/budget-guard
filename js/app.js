@@ -1,13 +1,13 @@
 import {
   loadState, saveState, replaceStateWithRecovery, loadRecoveryBackups,
   getLastLoadInfo, getSafetyStatus, markDataExported
-} from "./db.js?v=20260929-10";
+} from "./db.js?v=20260929-11";
 import {
   uid, cents, yuan, isoToday, compareDate, within, daysInclusive, formatDate, cycleStatus,
   createInitialState, accountById, channelById, cycleById, sortedAccounts, sortedChannels,
   netTransactions, incomingCycleAdjustment, channelSnapshot, spendableRemaining,
   eligibleContexts, pendingSettlements, nextCycleForChannel
-} from "./model.js?v=20260929-10";
+} from "./model.js?v=20260929-11";
 
 const app = document.querySelector("#app");
 const dialog = document.querySelector("#app-dialog");
@@ -20,6 +20,19 @@ let currentView = "home";
 let toastTimer;
 let dragSort = null;
 let storageMissingAtStart = false;
+const COLLAPSED_CYCLES_KEY = "budget-lens-collapsed-cycles-v1";
+const collapsedCycleIds = (() => {
+  try {
+    const ids = JSON.parse(localStorage.getItem(COLLAPSED_CYCLES_KEY) || "[]");
+    return new Set(Array.isArray(ids) ? ids : []);
+  } catch {
+    return new Set();
+  }
+})();
+
+function saveCollapsedCycles() {
+  try { localStorage.setItem(COLLAPSED_CYCLES_KEY, JSON.stringify([...collapsedCycleIds])); } catch {}
+}
 
 const h = value => String(value ?? "").replace(/[&<>'"]/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", "'": "&#39;", '"': "&quot;" })[char]);
 const money = value => `${value < 0 ? "-" : ""}¥${yuan(Math.abs(value))}`;
@@ -138,14 +151,20 @@ function renderAccount(account) {
 
 function renderCycle(cycle) {
   const status = cycleStatus(cycle);
+  const collapsed = collapsedCycleIds.has(cycle.id);
   const spent = cycle.allocations.reduce((sum, allocation) => sum + netTransactions(state, cycle.id, allocation.channelId), 0);
   const total = cycle.allocations.reduce((sum, allocation) => sum + allocation.totalBudget + incomingCycleAdjustment(state, cycle, allocation.channelId), 0);
   const allocations = [...cycle.allocations].sort((a, b) => (channelById(state, a.channelId)?.order ?? 0) - (channelById(state, b.channelId)?.order ?? 0));
-  return `<div class="cycle ${status === "ended" ? "ended-cycle" : ""}">
-    <div class="cycle-header"><div><h3>${h(cycle.name)}</h3><p>${formatDate(cycle.start)}—${formatDate(cycle.end)}${status === "active" ? currentSegmentText(cycle) : ""}</p></div><span class="status ${status}">${statusLabel(status)}</span></div>
-    ${status === "ended" ? `<div class="cycle-result"><span>预算 ${money(total)}</span><span>实际 ${money(spent)}</span></div>` : ""}
-    <div class="channel-list">${allocations.map(allocation => renderChannel(cycle, allocation, status)).join("")}</div>
-    ${status === "ended" ? `<div class="cycle-actions"><button class="secondary-button" data-action="cycle-details" data-cycle-id="${cycle.id}" type="button">查看详情</button><button class="primary-button compact" data-action="archive-cycle" data-cycle-id="${cycle.id}" type="button">归档</button></div>` : ""}
+  return `<div class="cycle ${collapsed ? "collapsed" : ""} ${status === "ended" ? "ended-cycle" : ""}">
+    <button class="cycle-header cycle-toggle" data-action="toggle-cycle-collapse" data-cycle-id="${cycle.id}" type="button" aria-expanded="${!collapsed}" aria-label="${collapsed ? "展开" : "收起"}${h(cycle.name)}">
+      <span class="cycle-heading-text"><span class="cycle-title-text">${h(cycle.name)}</span><span class="cycle-period">${formatDate(cycle.start)}—${formatDate(cycle.end)}${status === "active" ? currentSegmentText(cycle) : ""}</span></span>
+      <span class="cycle-header-end"><span class="status ${status}">${statusLabel(status)}</span><span class="cycle-fold-mark" aria-hidden="true">${collapsed ? "＋" : "−"}</span></span>
+    </button>
+    ${collapsed ? "" : `<div class="cycle-content">
+      ${status === "ended" ? `<div class="cycle-result"><span>预算 ${money(total)}</span><span>实际 ${money(spent)}</span></div>` : ""}
+      <div class="channel-list">${allocations.map(allocation => renderChannel(cycle, allocation, status)).join("")}</div>
+      ${status === "ended" ? `<div class="cycle-actions"><button class="secondary-button" data-action="cycle-details" data-cycle-id="${cycle.id}" type="button">查看详情</button><button class="primary-button compact" data-action="archive-cycle" data-cycle-id="${cycle.id}" type="button">归档</button></div>` : ""}
+    </div>`}
   </div>`;
 }
 
@@ -597,6 +616,12 @@ async function handleClick(event) {
   if (action === "add-cycle") openCycleDialog();
   if (action === "edit-cycle") openCycleDialog(cycleById(state, button.dataset.id));
   if (action === "delete-cycle") await deleteBudgetCycle(button.dataset.id);
+  if (action === "toggle-cycle-collapse") {
+    const cycleId = button.dataset.cycleId;
+    if (collapsedCycleIds.has(cycleId)) collapsedCycleIds.delete(cycleId); else collapsedCycleIds.add(cycleId);
+    saveCollapsedCycles();
+    render();
+  }
   if (action === "channel-detail") openChannelDetail(button.dataset.cycleId, button.dataset.channelId);
   if (action === "cycle-details") { currentView = "records"; closeDialog(); render(); }
   if (action === "delete-record") {
@@ -1082,7 +1107,7 @@ async function init() {
   registerWebTools();
   if (loadInfo.recovered) showToast(loadInfo.source === "mirror" ? "已从本地镜像恢复数据" : "已从最近自动版本恢复数据");
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js?v=20260929-10", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./sw.js?v=20260929-11", { updateViaCache: "none" })
       .then(registration => {
         registration.addEventListener("updatefound", () => {
           const worker = registration.installing;

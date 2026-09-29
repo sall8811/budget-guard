@@ -1,10 +1,10 @@
-import { loadState, saveState, replaceStateWithRecovery, loadRecoveryBackups } from "./db.js?v=20260929-1";
+import { loadState, saveState, replaceStateWithRecovery, loadRecoveryBackups } from "./db.js?v=20260929-2";
 import {
   uid, cents, yuan, isoToday, compareDate, within, daysInclusive, formatDate, cycleStatus,
   createInitialState, isUntouchedLegacySample, accountById, channelById, cycleById, sortedAccounts, sortedChannels,
   netTransactions, incomingCycleAdjustment, channelSnapshot, spendableRemaining,
   eligibleContexts, pendingSettlements, nextCycleForChannel
-} from "./model.js?v=20260929-1";
+} from "./model.js?v=20260929-2";
 
 const app = document.querySelector("#app");
 const dialog = document.querySelector("#app-dialog");
@@ -155,13 +155,13 @@ function renderManage() {
   const accounts = sortedAccounts(state).sort((a, b) => Number(a.archived) - Number(b.archived) || a.order - b.order);
   const latestBackup = recoveryBackups[0];
   const cycleGroups = accounts.map(renderManageCycles).filter(Boolean).join("");
-  return `${header("统一管理", "账户、渠道和预算周期")}
+  return `${header("统一管理", "预算周期、账户和渠道")}
+    <section class="manage-section"><div class="section-heading"><div><h2>预算周期</h2><p>可编辑、删除，并拖动同状态周期排序</p></div><button class="small-add" data-action="add-cycle" type="button">＋ 新建</button></div>
+      ${cycleGroups}</section>
     <section class="manage-section"><div class="section-heading"><div><h2>账户</h2><p>按住左侧手柄拖动排序</p></div><button class="small-add" data-action="add-account" type="button">＋ 新建</button></div>
-      <div class="manage-list" data-sort-list>${accounts.map(renderManageAccount).join("") || emptyState("暂无账户", "新建一个账户开始。")}</div></section>
+      <div class="manage-list" data-sort-list>${accounts.map(renderManageAccount).join("")}</div></section>
     <section class="manage-section"><div class="section-heading"><div><h2>开销渠道</h2><p>渠道固定归属账户，可拖动排序</p></div><button class="small-add" data-action="add-channel" type="button">＋ 新建</button></div>
       ${accounts.map(account => renderManageChannels(account)).join("")}</section>
-    <section class="manage-section"><div class="section-heading"><div><h2>预算周期</h2><p>可编辑、删除，并拖动同状态周期排序</p></div><button class="small-add" data-action="add-cycle" type="button">＋ 新建</button></div>
-      ${cycleGroups || emptyState("暂无周期", "创建周期并为渠道分配预算。")}</section>
     <section class="manage-section"><div class="section-heading"><div><h2>手动同步</h2><p>通过数据文件在手机和电脑之间转移</p></div></div>
       <div class="data-actions"><button class="secondary-button" data-action="export" type="button">保存数据文件</button><label class="secondary-button file-button">导入并覆盖<input id="import-file" type="file" accept="application/json,.json"></label><button class="secondary-button" data-action="show-backups" type="button">恢复旧版本${recoveryBackups.length ? `（${recoveryBackups.length}）` : ""}</button></div>
       <div class="sync-status"><strong>${latestBackup ? "最近自动备份" : "还没有自动备份"}</strong><span>${latestBackup ? `${dateTimeLabel(latestBackup.createdAt)} · ${h(latestBackup.reason)}` : "每次导入或重置前，当前数据都会先保存在这里。"}</span></div>
@@ -841,7 +841,7 @@ async function init() {
   render();
   registerWebTools();
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js?v=20260929-1", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./sw.js?v=20260929-2", { updateViaCache: "none" })
       .then(registration => registration.update())
       .catch(() => {});
   }

@@ -1,10 +1,10 @@
-import { loadState, saveState, replaceStateWithRecovery, loadRecoveryBackups } from "./db.js";
+import { loadState, saveState, replaceStateWithRecovery, loadRecoveryBackups } from "./db.js?v=20260929-1";
 import {
   uid, cents, yuan, isoToday, compareDate, within, daysInclusive, formatDate, cycleStatus,
   createInitialState, isUntouchedLegacySample, accountById, channelById, cycleById, sortedAccounts, sortedChannels,
   netTransactions, incomingCycleAdjustment, channelSnapshot, spendableRemaining,
   eligibleContexts, pendingSettlements, nextCycleForChannel
-} from "./model.js";
+} from "./model.js?v=20260929-1";
 
 const app = document.querySelector("#app");
 const dialog = document.querySelector("#app-dialog");
@@ -840,7 +840,11 @@ async function init() {
   recoveryBackups = await loadRecoveryBackups();
   render();
   registerWebTools();
-  if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js").catch(() => {});
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("./sw.js?v=20260929-1", { updateViaCache: "none" })
+      .then(registration => registration.update())
+      .catch(() => {});
+  }
 }
 
 init().catch(() => {

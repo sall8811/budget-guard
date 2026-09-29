@@ -1,10 +1,10 @@
-import { loadState, saveState, replaceStateWithRecovery, loadRecoveryBackups } from "./db.js?v=20260929-3";
+import { loadState, saveState, replaceStateWithRecovery, loadRecoveryBackups } from "./db.js?v=20260929-4";
 import {
   uid, cents, yuan, isoToday, compareDate, within, daysInclusive, formatDate, cycleStatus,
   createInitialState, isUntouchedLegacySample, accountById, channelById, cycleById, sortedAccounts, sortedChannels,
   netTransactions, incomingCycleAdjustment, channelSnapshot, spendableRemaining,
   eligibleContexts, pendingSettlements, nextCycleForChannel
-} from "./model.js?v=20260929-3";
+} from "./model.js?v=20260929-4";
 
 const app = document.querySelector("#app");
 const dialog = document.querySelector("#app-dialog");
@@ -70,13 +70,13 @@ function render() {
 }
 
 function renderHome() {
-  const accounts = sortedAccounts(state).filter(item => !item.archived);
+  const accounts = sortedAccounts(state).filter(account => !account.archived && state.cycles.some(cycle => cycle.accountId === account.id && !cycle.archived));
   const accountCards = accounts.map(renderAccount).join("");
   return `${header("额度看板", `${nowLabel()} · 只看还能花多少`)}
     <section class="notice-strip ${pendingSettlements(state).length ? "" : "hidden"}" data-action="notifications">
       <div><strong>${pendingSettlements(state).length}项结转待确认</strong><span>处理后额度会自动更新</span></div><span>›</span>
     </section>
-    ${accountCards || emptyState("还没有账户", "先到管理页建立账户和开销渠道。")}`;
+    ${accountCards}`;
 }
 
 function cycleOrderValue(cycle) {
@@ -290,14 +290,27 @@ function openCycleDialog(existing = null) {
 function renderCycleDialog() {
   const accounts = sortedAccounts(state).filter(item => !item.archived);
   const channels = sortedChannels(state, cycleDraft.accountId).filter(item => !item.archived);
-  cycleDraft.segments.forEach((segment, index) => { segment.name = `第${index + 1}分段`; });
+  normalizeSegmentDates();
+  const minimumCycleDays = Math.max(1, cycleDraft.segments.length);
+  const latestCycleStart = addDays(cycleDraft.end, -(minimumCycleDays - 1));
+  const earliestCycleEnd = addDays(cycleDraft.start, minimumCycleDays - 1);
   openDialog(`<form id="cycle-form" class="dialog-card wide-dialog">
     <div class="dialog-head"><div><p class="dialog-kicker">预算设置</p><h2 id="dialog-title">${cycleDraft.id ? "编辑" : "新建"}预算周期</h2></div><button class="dialog-close" data-action="close-dialog" type="button">×</button></div>
     <div class="form-grid cycle-form-grid"><label class="field"><span>周期名称</span><input name="name" value="${h(cycleDraft.name)}" maxlength="30" placeholder="例如：日常开销" required></label>
     <label class="field"><span>所属账户</span><select name="accountId" ${cycleDraft.id ? "disabled" : ""}>${accounts.map(account => `<option value="${account.id}" ${cycleDraft.accountId === account.id ? "selected" : ""}>${h(account.name)}</option>`).join("")}</select></label>
-    <div class="field date-range-field"><span>起止日期</span><div class="date-range-inputs"><input name="start" type="date" value="${cycleDraft.start}" aria-label="开始日期" required><input name="end" type="date" value="${cycleDraft.end}" aria-label="结束日期" required></div></div></div>
+    <div class="field date-range-field"><span>起止日期</span><div class="date-range-inputs"><input name="start" type="date" value="${cycleDraft.start}" max="${latestCycleStart}" aria-label="开始日期" required><input name="end" type="date" value="${cycleDraft.end}" min="${earliestCycleEnd}" aria-label="结束日期" required></div></div></div>
     <div class="form-section"><div class="subheading"><div><strong>统一分段</strong><span>选择分段的渠道都会使用这些日期</span></div><button class="small-add" data-action="add-segment" type="button">＋ 分段</button></div>
-      <div id="segment-fields">${cycleDraft.segments.length ? cycleDraft.segments.map((segment, index) => `<div class="segment-edit"><div class="segment-edit-heading"><span>${h(segment.name)}</span><button data-action="remove-segment" data-index="${index}" type="button" aria-label="删除${h(segment.name)}">删除</button></div><input data-segment-index="${index}" data-key="name" type="hidden" value="${h(segment.name)}"><div class="date-range-inputs"><input data-segment-index="${index}" data-key="start" type="date" value="${segment.start}" aria-label="${h(segment.name)}开始日期"><input data-segment-index="${index}" data-key="end" type="date" value="${segment.end}" aria-label="${h(segment.name)}结束日期"></div></div>`).join("") : `<p class="form-note">不需要分段可以留空。</p>`}</div>
+      <div id="segment-fields">${cycleDraft.segments.length ? cycleDraft.segments.map((segment, index) => {
+        const first = index === 0;
+        const last = index === cycleDraft.segments.length - 1;
+        const previous = cycleDraft.segments[index - 1];
+        const following = cycleDraft.segments[index + 1];
+        const startMin = first ? cycleDraft.start : addDays(previous.start, 1);
+        const startMax = segment.end;
+        const endMin = segment.start;
+        const endMax = last ? cycleDraft.end : addDays(following.end, -1);
+        return `<div class="segment-edit"><div class="segment-edit-heading"><span>${h(segment.name)}</span><button data-action="remove-segment" data-index="${index}" type="button" aria-label="删除${h(segment.name)}">删除</button></div><input data-segment-index="${index}" data-key="name" type="hidden" value="${h(segment.name)}"><div class="date-range-inputs"><input data-segment-index="${index}" data-key="start" type="date" value="${segment.start}" min="${startMin}" max="${startMax}" ${first ? "readonly" : ""} aria-label="${h(segment.name)}开始日期"><input data-segment-index="${index}" data-key="end" type="date" value="${segment.end}" min="${endMin}" max="${endMax}" ${last ? "readonly" : ""} aria-label="${h(segment.name)}结束日期"></div></div>`;
+      }).join("") : `<p class="form-note">不需要分段可以留空。</p>`}</div>
     </div>
     <div class="form-section"><div class="subheading"><div><strong>渠道预算</strong><span>至少选择一个渠道</span></div></div>
       <div class="allocation-list">${channels.length ? channels.map(channel => renderAllocationDraft(channel)).join("") : `<p class="form-note">该账户还没有可用渠道。</p>`}</div>
@@ -369,6 +382,30 @@ function addDays(date, count) {
   const value = new Date(`${date}T12:00:00`);
   value.setDate(value.getDate() + count);
   return value.toISOString().slice(0,10);
+}
+
+function clampDate(value, minimum, maximum) {
+  if (compareDate(value, minimum) < 0) return minimum;
+  if (compareDate(value, maximum) > 0) return maximum;
+  return value;
+}
+
+function normalizeSegmentDates() {
+  const segments = cycleDraft?.segments || [];
+  if (!segments.length || compareDate(cycleDraft.start, cycleDraft.end) > 0) return;
+  let cursor = cycleDraft.start;
+  segments.forEach((segment, index) => {
+    const last = index === segments.length - 1;
+    segment.name = `第${index + 1}分段`;
+    segment.start = cursor;
+    if (last) {
+      segment.end = cycleDraft.end;
+      return;
+    }
+    const latestEnd = addDays(cycleDraft.end, -(segments.length - index - 1));
+    segment.end = clampDate(segment.end || cursor, cursor, latestEnd);
+    cursor = addDays(segment.end, 1);
+  });
 }
 
 function openChannelDetail(cycleId, channelId) {
@@ -511,7 +548,18 @@ async function handleClick(event) {
   if (action === "add-segment") {
     syncCycleDraftFromForm();
     const index = cycleDraft.segments.length;
-    cycleDraft.segments.push({ name: `第${index + 1}分段`, start: index ? addDays(cycleDraft.segments[index - 1].end, 1) : cycleDraft.start, end: cycleDraft.end });
+    if (daysInclusive(cycleDraft.start, cycleDraft.end) <= index) return showToast("周期天数不足，无法继续分段");
+    if (!index) {
+      cycleDraft.segments.push({ name: "第1分段", start: cycleDraft.start, end: cycleDraft.end });
+    } else {
+      const previous = cycleDraft.segments[index - 1];
+      const availableDays = daysInclusive(previous.start, previous.end);
+      if (availableDays < 2) return showToast("最后一段至少需要两天才能继续拆分");
+      const previousEnd = addDays(previous.start, Math.floor(availableDays / 2) - 1);
+      previous.end = previousEnd;
+      cycleDraft.segments.push({ name: `第${index + 1}分段`, start: addDays(previousEnd, 1), end: cycleDraft.end });
+    }
+    normalizeSegmentDates();
     renderCycleDialog();
   }
   if (action === "remove-segment") {
@@ -519,6 +567,7 @@ async function handleClick(event) {
     const index = Number(button.dataset.index);
     cycleDraft.segments.splice(index, 1);
     Object.values(cycleDraft.selected).forEach(allocation => allocation.segmentValues.splice(index, 1));
+    normalizeSegmentDates();
     renderCycleDialog();
   }
   if (action === "settle") await settlePending(Number(button.dataset.index), button.dataset.decision);
@@ -796,6 +845,37 @@ function handleCycleDraftInput(event) {
   const input = event.target;
   if (input.name === "accountId") { syncCycleDraftFromForm(); cycleDraft.accountId = input.value; cycleDraft.selected = {}; renderCycleDialog(); return; }
   syncCycleDraftFromForm();
+  if (input.name === "start" || input.name === "end") {
+    const minimumDays = Math.max(1, cycleDraft.segments.length);
+    if (daysInclusive(cycleDraft.start, cycleDraft.end) < minimumDays) {
+      if (input.name === "start") cycleDraft.end = addDays(cycleDraft.start, minimumDays - 1);
+      else cycleDraft.start = addDays(cycleDraft.end, -(minimumDays - 1));
+    }
+    normalizeSegmentDates();
+    renderCycleDialog();
+    return;
+  }
+  if (input.dataset.segmentIndex !== undefined && (input.dataset.key === "start" || input.dataset.key === "end")) {
+    const index = Number(input.dataset.segmentIndex);
+    const segment = cycleDraft.segments[index];
+    if (input.dataset.key === "start") {
+      if (!index) segment.start = cycleDraft.start;
+      else {
+        const previous = cycleDraft.segments[index - 1];
+        segment.start = clampDate(segment.start, addDays(previous.start, 1), segment.end);
+        previous.end = addDays(segment.start, -1);
+      }
+    } else if (index === cycleDraft.segments.length - 1) {
+      segment.end = cycleDraft.end;
+    } else {
+      const following = cycleDraft.segments[index + 1];
+      segment.end = clampDate(segment.end, segment.start, addDays(following.end, -1));
+      following.start = addDays(segment.end, 1);
+    }
+    normalizeSegmentDates();
+    renderCycleDialog();
+    return;
+  }
   if (input.dataset.key === "enabled" || input.dataset.key === "segmented") { renderCycleDialog(); return; }
   if (input.dataset.key === "total" || input.dataset.segmentBudget !== undefined) {
     const id = input.dataset.channelId;
@@ -841,7 +921,7 @@ async function init() {
   render();
   registerWebTools();
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js?v=20260929-3", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./sw.js?v=20260929-4", { updateViaCache: "none" })
       .then(registration => registration.update())
       .catch(() => {});
   }

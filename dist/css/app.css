@@ -1,4 +1,4 @@
-@import url("./tokens.css?v=20260929-6");
+@import url("./tokens.css?v=20260929-7");
 
 * { box-sizing: border-box; }
 html { background: var(--color-bg); }
@@ -202,10 +202,11 @@ body.sorting { user-select: none; }
 .record-amount-field input { height: 46px; min-height: 46px; font-size: 1.4rem; }
 .record-meta-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-2); }
 .record-meta-grid .field { min-width: 0; margin-bottom: var(--space-3); }
-.record-meta-grid input, .record-meta-grid select { width: 100%; min-width: 0; min-height: 44px; padding-inline: 8px; border-radius: 10px; font-size: .78rem; }
-.record-meta-grid input[type="date"] { display: block; overflow: hidden; -webkit-appearance: none; appearance: none; }
-.record-meta-grid input[type="date"]::-webkit-date-and-time-value { min-width: 0; text-align: left; }
-.record-meta-grid select { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.record-meta-grid select, .record-date-control { width: 100%; min-width: 0; height: 42px; min-height: 42px; box-sizing: border-box; border: 1px solid var(--color-line); border-radius: 10px; color: var(--color-text); background: var(--color-bg); font-size: .78rem; }
+.record-meta-grid select { padding: 0 28px 0 10px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.record-date-control { position: relative; display: flex; align-items: center; padding: 0 10px; overflow: hidden; }
+.record-date-control > span { overflow: hidden; color: var(--color-text); font-size: .78rem; font-weight: 400; text-overflow: ellipsis; white-space: nowrap; }
+.record-date-control input[type="date"] { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; min-width: 0; min-height: 0; margin: 0; padding: 0; border: 0; opacity: 0; cursor: pointer; }
 .record-note-field { margin-bottom: var(--space-3); }
 .record-note-field input { min-height: 44px; border-radius: 10px; }
 .record-dialog .dialog-actions { margin-top: var(--space-4); }

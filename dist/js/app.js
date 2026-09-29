@@ -1,10 +1,10 @@
-import { loadState, saveState, replaceStateWithRecovery, loadRecoveryBackups } from "./db.js?v=20260929-5";
+import { loadState, saveState, replaceStateWithRecovery, loadRecoveryBackups } from "./db.js?v=20260929-6";
 import {
   uid, cents, yuan, isoToday, compareDate, within, daysInclusive, formatDate, cycleStatus,
   createInitialState, isUntouchedLegacySample, accountById, channelById, cycleById, sortedAccounts, sortedChannels,
   netTransactions, incomingCycleAdjustment, channelSnapshot, spendableRemaining,
   eligibleContexts, pendingSettlements, nextCycleForChannel
-} from "./model.js?v=20260929-5";
+} from "./model.js?v=20260929-6";
 
 const app = document.querySelector("#app");
 const dialog = document.querySelector("#app-dialog");
@@ -135,7 +135,7 @@ function renderChannel(cycle, allocation, status) {
 
 function renderRecords() {
   const transactions = [...state.transactions].sort((a, b) => compareDate(b.date, a.date) || b.createdAt.localeCompare(a.createdAt));
-  return `${header("支出记录", "只记录类型、渠道、金额和日期")}
+  return `${header("支出记录", "记录类型、渠道、金额、日期和备注")}
     <section class="records-panel">${transactions.length ? transactions.map(renderTransaction).join("") : emptyState("还没有记录", "点击右下角加号记一笔。")}</section>`;
 }
 
@@ -145,7 +145,7 @@ function renderTransaction(tx) {
   const account = cycle ? accountById(state, cycle.accountId) : null;
   return `<article class="record-row">
     <div class="record-date"><strong>${tx.date.slice(8)}</strong><span>${Number(tx.date.slice(5, 7))}月</span></div>
-    <div class="record-info"><strong>${h(channel?.name || "已归档渠道")}</strong><span>${h(account?.name || "未知账户")} · ${h(cycle?.name || "未知周期")}</span></div>
+    <div class="record-info"><strong>${h(channel?.name || "已归档渠道")}</strong><span>${tx.note ? h(tx.note) : `${h(account?.name || "未知账户")} · ${h(cycle?.name || "未知周期")}`}</span></div>
     <div class="record-amount ${tx.type}"><strong>${tx.type === "refund" ? "+" : "-"}${money(tx.amount)}</strong><span>${tx.type === "refund" ? "退款" : "支出"}</span></div>
     <button class="more-button" data-action="edit-record" data-id="${tx.id}" aria-label="编辑记录" type="button">•••</button>
   </article>`;
@@ -212,13 +212,14 @@ function emptyState(title, text) {
 function openRecordDialog(existing = null) {
   const initialDate = existing?.date || today();
   const contexts = eligibleContexts(state, initialDate);
-  openDialog(`<form id="record-form" class="dialog-card">
+  openDialog(`<form id="record-form" class="dialog-card record-dialog">
     <div class="dialog-head"><div><p class="dialog-kicker">快速记录</p><h2 id="dialog-title">${existing ? "修改记录" : "记一笔"}</h2></div><button class="dialog-close" data-action="close-dialog" type="button">×</button></div>
     <input type="hidden" name="id" value="${existing?.id || ""}">
-    <div class="type-switch"><label><input type="radio" name="type" value="expense" ${!existing || existing.type === "expense" ? "checked" : ""}><span>支出</span></label><label><input type="radio" name="type" value="refund" ${existing?.type === "refund" ? "checked" : ""}><span>退款</span></label></div>
-    <label class="field amount-field"><span>金额</span><div><b>¥</b><input name="amount" inputmode="decimal" min="0.01" step="0.01" value="${existing ? existing.amount / 100 : ""}" placeholder="0.00" required></div></label>
-    <label class="field"><span>日期</span><input id="record-date" name="date" type="date" value="${initialDate}" required></label>
-    <label class="field"><span>开销渠道</span><select id="record-context" name="context" required>${contextOptions(contexts, existing)}</select></label>
+    <div class="type-switch record-type-switch"><label><input type="radio" name="type" value="expense" ${!existing || existing.type === "expense" ? "checked" : ""}><span>支出</span></label><label><input type="radio" name="type" value="refund" ${existing?.type === "refund" ? "checked" : ""}><span>退款</span></label></div>
+    <label class="field amount-field record-amount-field"><span>金额</span><div><b>¥</b><input name="amount" inputmode="decimal" min="0.01" step="0.01" value="${existing ? existing.amount / 100 : ""}" placeholder="0.00" required></div></label>
+    <div class="record-meta-grid"><label class="field"><span>日期</span><input id="record-date" name="date" type="date" value="${initialDate}" required></label>
+    <label class="field"><span>开销渠道</span><select id="record-context" name="context" required>${contextOptions(contexts, existing)}</select></label></div>
+    <label class="field record-note-field"><span>备注</span><input name="note" value="${h(existing?.note || "")}" maxlength="80" placeholder="选填"></label>
     <p id="record-empty" class="form-note ${contexts.length ? "hidden" : ""}">这一天没有可用的渠道预算，请先创建周期。</p>
     <div class="dialog-actions">${existing ? `<button class="text-danger" data-action="delete-record" data-id="${existing.id}" type="button">删除</button>` : `<span></span>`}<button class="primary-button" ${contexts.length ? "" : "disabled"} type="submit">保存</button></div>
   </form>`);
@@ -228,10 +229,10 @@ function openRecordDialog(existing = null) {
 
 function contextOptions(contexts, existing) {
   if (!contexts.length) return `<option value="">无可用渠道</option>`;
-  return contexts.map(({ account, cycle, channel }) => {
+  return contexts.map(({ cycle, channel }) => {
     const value = `${cycle.id}|${channel.id}`;
     const selected = existing && existing.cycleId === cycle.id && existing.channelId === channel.id ? "selected" : "";
-    return `<option value="${value}" ${selected}>${h(account.name)} · ${h(cycle.name)} · ${h(channel.name)}</option>`;
+    return `<option value="${value}" ${selected}>${h(channel.name)}</option>`;
   }).join("");
 }
 
@@ -287,7 +288,9 @@ function openCycleDialog(existing = null) {
   renderCycleDialog();
 }
 
-function renderCycleDialog() {
+function renderCycleDialog(preservePosition = false) {
+  const previousCard = preservePosition ? dialogContent.querySelector("#cycle-form") : null;
+  const previousScrollTop = previousCard?.scrollTop || 0;
   const accounts = sortedAccounts(state).filter(item => !item.archived);
   const channels = sortedChannels(state, cycleDraft.accountId).filter(item => !item.archived);
   normalizeSegmentDates();
@@ -318,6 +321,13 @@ function renderCycleDialog() {
     <p id="cycle-error" class="form-error hidden"></p>
     <div class="dialog-actions"><span></span><button class="primary-button" type="submit">${cycleDraft.id ? "保存修改" : "创建周期"}</button></div>
   </form>`);
+  if (preservePosition) {
+    const nextCard = dialogContent.querySelector("#cycle-form");
+    if (nextCard) {
+      nextCard.scrollTop = previousScrollTop;
+      requestAnimationFrame(() => { nextCard.scrollTop = previousScrollTop; });
+    }
+  }
 }
 
 function renderAllocationDraft(channel) {
@@ -448,7 +458,7 @@ async function handleSubmit(event) {
     const data = new FormData(form);
     const [cycleId, channelId] = String(data.get("context")).split("|");
     const existing = state.transactions.find(item => item.id === data.get("id"));
-    const record = { id: existing?.id || uid("tx"), cycleId, channelId, type: data.get("type"), amount: cents(data.get("amount")), date: data.get("date"), createdAt: existing?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
+    const record = { id: existing?.id || uid("tx"), cycleId, channelId, type: data.get("type"), amount: cents(data.get("amount")), date: data.get("date"), note: String(data.get("note") || "").trim(), createdAt: existing?.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
     if (existing) Object.assign(existing, record); else state.transactions.push(record);
     invalidateSettlements(cycleId, channelId);
     closeDialog();
@@ -562,7 +572,7 @@ async function handleClick(event) {
       cycleDraft.segments.push({ name: `第${index + 1}分段`, start: addDays(previousEnd, 1), end: cycleDraft.end });
     }
     normalizeSegmentDates();
-    renderCycleDialog();
+    renderCycleDialog(true);
   }
   if (action === "remove-segment") {
     syncCycleDraftFromForm();
@@ -570,7 +580,7 @@ async function handleClick(event) {
     cycleDraft.segments.splice(index, 1);
     Object.values(cycleDraft.selected).forEach(allocation => allocation.segmentValues.splice(index, 1));
     normalizeSegmentDates();
-    renderCycleDialog();
+    renderCycleDialog(true);
   }
   if (action === "settle") await settlePending(Number(button.dataset.index), button.dataset.decision);
   if (action === "export") exportBackup();
@@ -791,7 +801,8 @@ function registerWebTools() {
         channelId: { type: "string" },
         date: { type: "string", pattern: "^\\d{4}-\\d{2}-\\d{2}$" },
         type: { type: "string", enum: ["expense", "refund"] },
-        amount: { type: "number", exclusiveMinimum: 0 }
+        amount: { type: "number", exclusiveMinimum: 0 },
+        note: { type: "string", maxLength: 80 }
       },
       required: ["channelId", "date", "type", "amount"],
       additionalProperties: false
@@ -802,7 +813,7 @@ function registerWebTools() {
       const contexts = eligibleContexts(state, input.date).filter(item => item.channel.id === input.channelId);
       if (contexts.length !== 1) throw new Error("该渠道在指定日期没有唯一有效预算");
       const { cycle, channel } = contexts[0];
-      const record = { id: uid("tx"), cycleId: cycle.id, channelId: channel.id, type: input.type, amount: cents(input.amount), date: input.date, createdAt: new Date().toISOString() };
+      const record = { id: uid("tx"), cycleId: cycle.id, channelId: channel.id, type: input.type, amount: cents(input.amount), date: input.date, note: String(input.note || "").trim(), createdAt: new Date().toISOString() };
       state.transactions.push(record);
       invalidateSettlements(cycle.id, channel.id);
       await saveState(state);
@@ -893,7 +904,7 @@ async function finishDragSort(event) {
 function handleCycleDraftInput(event) {
   if (!dialogContent.querySelector("#cycle-form")) return;
   const input = event.target;
-  if (input.name === "accountId") { syncCycleDraftFromForm(); cycleDraft.accountId = input.value; cycleDraft.selected = {}; renderCycleDialog(); return; }
+  if (input.name === "accountId") { syncCycleDraftFromForm(); cycleDraft.accountId = input.value; cycleDraft.selected = {}; renderCycleDialog(true); return; }
   syncCycleDraftFromForm();
   if (input.name === "start" || input.name === "end") {
     const minimumDays = Math.max(1, cycleDraft.segments.length);
@@ -902,7 +913,7 @@ function handleCycleDraftInput(event) {
       else cycleDraft.start = addDays(cycleDraft.end, -(minimumDays - 1));
     }
     normalizeSegmentDates();
-    renderCycleDialog();
+    renderCycleDialog(true);
     return;
   }
   if (input.dataset.segmentIndex !== undefined && (input.dataset.key === "start" || input.dataset.key === "end")) {
@@ -923,10 +934,10 @@ function handleCycleDraftInput(event) {
       following.start = addDays(segment.end, 1);
     }
     normalizeSegmentDates();
-    renderCycleDialog();
+    renderCycleDialog(true);
     return;
   }
-  if (input.dataset.key === "enabled" || input.dataset.key === "segmented") { renderCycleDialog(); return; }
+  if (input.dataset.key === "enabled" || input.dataset.key === "segmented") { renderCycleDialog(true); return; }
   if (input.dataset.key === "total" || input.dataset.segmentBudget !== undefined) {
     const id = input.dataset.channelId;
     const allocation = cycleDraft.selected[id];
@@ -935,7 +946,7 @@ function handleCycleDraftInput(event) {
       if (input.dataset.key === "total" || index < cycleDraft.segments.length - 1) {
         const used = allocation.segmentValues.slice(0, -1).reduce((sum, value) => sum + (Number(value) || 0), 0);
         allocation.segmentValues[cycleDraft.segments.length - 1] = String(Math.max(0, (Number(allocation.total) || 0) - used));
-        renderCycleDialog();
+        renderCycleDialog(true);
       }
     }
   }
@@ -971,7 +982,7 @@ async function init() {
   render();
   registerWebTools();
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js?v=20260929-5", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./sw.js?v=20260929-6", { updateViaCache: "none" })
       .then(registration => registration.update())
       .catch(() => {});
   }

@@ -1,4 +1,4 @@
-@import url("./tokens.css?v=20260929-5");
+@import url("./tokens.css?v=20260929-6");
 
 * { box-sizing: border-box; }
 html { background: var(--color-bg); }
@@ -192,6 +192,23 @@ body.sorting { user-select: none; }
 .type-switch input { position: absolute; opacity: 0; }
 .type-switch span { min-height: 40px; display: grid; place-items: center; border-radius: 9px; color: var(--color-text-soft); font-size: .85rem; font-weight: 750; }
 .type-switch input:checked + span { color: var(--color-primary); background: var(--color-surface); box-shadow: 0 3px 10px rgba(0, 0, 0, .08); }
+.record-dialog .dialog-head { margin-bottom: var(--space-4); }
+.record-type-switch { width: 168px; margin-bottom: var(--space-3); padding: 3px; border-radius: 10px; }
+.record-type-switch span { min-height: 32px; border-radius: 7px; font-size: .76rem; }
+.record-amount-field { grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: var(--space-3); margin-bottom: var(--space-3); }
+.record-amount-field > span { white-space: nowrap; }
+.record-amount-field > div { min-width: 0; }
+.record-amount-field b { font-size: 1rem; }
+.record-amount-field input { height: 46px; min-height: 46px; font-size: 1.4rem; }
+.record-meta-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--space-2); }
+.record-meta-grid .field { min-width: 0; margin-bottom: var(--space-3); }
+.record-meta-grid input, .record-meta-grid select { width: 100%; min-width: 0; min-height: 44px; padding-inline: 8px; border-radius: 10px; font-size: .78rem; }
+.record-meta-grid input[type="date"] { display: block; overflow: hidden; -webkit-appearance: none; appearance: none; }
+.record-meta-grid input[type="date"]::-webkit-date-and-time-value { min-width: 0; text-align: left; }
+.record-meta-grid select { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.record-note-field { margin-bottom: var(--space-3); }
+.record-note-field input { min-height: 44px; border-radius: 10px; }
+.record-dialog .dialog-actions { margin-top: var(--space-4); }
 .dialog-actions { margin-top: var(--space-5); display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); }
 .primary-button, .secondary-button { min-height: 44px; padding: 0 16px; border-radius: 12px; font-weight: 750; font-size: .82rem; }
 .primary-button { border: 0; color: var(--color-text-inverse); background: var(--color-primary); }

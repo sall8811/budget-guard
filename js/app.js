@@ -1,10 +1,10 @@
-import { loadState, saveState, replaceStateWithRecovery, loadRecoveryBackups } from "./db.js?v=20260929-6";
+import { loadState, saveState, replaceStateWithRecovery, loadRecoveryBackups } from "./db.js?v=20260929-7";
 import {
   uid, cents, yuan, isoToday, compareDate, within, daysInclusive, formatDate, cycleStatus,
   createInitialState, isUntouchedLegacySample, accountById, channelById, cycleById, sortedAccounts, sortedChannels,
   netTransactions, incomingCycleAdjustment, channelSnapshot, spendableRemaining,
   eligibleContexts, pendingSettlements, nextCycleForChannel
-} from "./model.js?v=20260929-6";
+} from "./model.js?v=20260929-7";
 
 const app = document.querySelector("#app");
 const dialog = document.querySelector("#app-dialog");
@@ -22,6 +22,10 @@ const money = value => `${value < 0 ? "-" : ""}¥${yuan(Math.abs(value))}`;
 const nowLabel = () => new Intl.DateTimeFormat("zh-CN", { month: "long", day: "numeric", weekday: "short" }).format(new Date());
 const statusLabel = status => ({ active: "进行中", upcoming: "即将开始", ended: "已结束", archived: "已归档" })[status];
 const today = () => isoToday();
+const inputDateLabel = value => {
+  const [year, month, day] = String(value || "").split("-");
+  return year && month && day ? `${year}年${Number(month)}月${Number(day)}日` : "选择日期";
+};
 const dateTimeLabel = value => new Intl.DateTimeFormat("zh-CN", { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }).format(new Date(value));
 
 async function persist(message) {
@@ -217,14 +221,17 @@ function openRecordDialog(existing = null) {
     <input type="hidden" name="id" value="${existing?.id || ""}">
     <div class="type-switch record-type-switch"><label><input type="radio" name="type" value="expense" ${!existing || existing.type === "expense" ? "checked" : ""}><span>支出</span></label><label><input type="radio" name="type" value="refund" ${existing?.type === "refund" ? "checked" : ""}><span>退款</span></label></div>
     <label class="field amount-field record-amount-field"><span>金额</span><div><b>¥</b><input name="amount" inputmode="decimal" min="0.01" step="0.01" value="${existing ? existing.amount / 100 : ""}" placeholder="0.00" required></div></label>
-    <div class="record-meta-grid"><label class="field"><span>日期</span><input id="record-date" name="date" type="date" value="${initialDate}" required></label>
+    <div class="record-meta-grid"><label class="field"><span>日期</span><span class="record-date-control"><span id="record-date-display">${h(inputDateLabel(initialDate))}</span><input id="record-date" name="date" type="date" value="${initialDate}" aria-label="日期" required></span></label>
     <label class="field"><span>开销渠道</span><select id="record-context" name="context" required>${contextOptions(contexts, existing)}</select></label></div>
     <label class="field record-note-field"><span>备注</span><input name="note" value="${h(existing?.note || "")}" maxlength="80" placeholder="选填"></label>
     <p id="record-empty" class="form-note ${contexts.length ? "hidden" : ""}">这一天没有可用的渠道预算，请先创建周期。</p>
     <div class="dialog-actions">${existing ? `<button class="text-danger" data-action="delete-record" data-id="${existing.id}" type="button">删除</button>` : `<span></span>`}<button class="primary-button" ${contexts.length ? "" : "disabled"} type="submit">保存</button></div>
   </form>`);
   const dateInput = dialogContent.querySelector("#record-date");
-  dateInput.addEventListener("change", () => refreshRecordContexts(dateInput.value, existing));
+  dateInput.addEventListener("change", () => {
+    dialogContent.querySelector("#record-date-display").textContent = inputDateLabel(dateInput.value);
+    refreshRecordContexts(dateInput.value, existing);
+  });
 }
 
 function contextOptions(contexts, existing) {
@@ -982,7 +989,7 @@ async function init() {
   render();
   registerWebTools();
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("./sw.js?v=20260929-6", { updateViaCache: "none" })
+    navigator.serviceWorker.register("./sw.js?v=20260929-7", { updateViaCache: "none" })
       .then(registration => registration.update())
       .catch(() => {});
   }
